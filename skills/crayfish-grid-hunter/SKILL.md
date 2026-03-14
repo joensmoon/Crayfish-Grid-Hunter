@@ -1,15 +1,7 @@
 ---
 name: crayfish-grid-hunter
-description: |
-  Crayfish Grid Hunter is an AI-powered grid trading assistant for Binance.
-  It scans the market for optimal grid trading candidates, validates them
-  with Smart Money signals and security audits, then generates dynamic
-  grid ranges with risk management parameters.
-  Use this skill when users ask about grid trading opportunities, coin screening,
-  grid range analysis, or "which coin is good for grid trading".
-metadata:
-  version: 4.0.0
-  author: joensmoon
+description: "Crayfish Grid Hunter is an AI-powered grid trading assistant for Binance. It scans the market for optimal grid trading candidates, validates them with Smart Money signals and security audits, then generates dynamic grid ranges with risk management parameters. Use this skill when users ask about grid trading opportunities, coin screening, grid range analysis, or 'which coin is good for grid trading'."
+metadata: {"version":"4.1.0","author":"joensmoon","openclaw":{"requires":{"env":["BINANCE_API_KEY"]},"primaryEnv":"BINANCE_API_KEY"}}
 dependencies:
   skills:
     - name: spot
@@ -106,6 +98,7 @@ Scan the market to identify high-volume tokens with grid-friendly characteristic
 2.  **Filter for Grid Candidates**: For each token, fetch 14-day daily Kline data.
     *   **Skill**: `spot`
     *   **API**: `/api/v3/klines`
+    *   **Base URL**: `https://api.binance.com` (primary) or `https://data-api.binance.vision` (fallback)
     *   **Parameters**: `symbol=<symbol>`, `interval=1d`, `limit=14`
 
 3.  **AI Evaluation**: Process the data to identify coins with **high volatility but a stable (sideways) trend**.
@@ -135,7 +128,7 @@ For each promising candidate, generate a dynamic grid range.
 
 ### Step 3: Smart Money Validation (Optional Enhancement)
 
-If the `trading-signal` skill is installed, validate candidates against Smart Money activity. This step adds a confidence boost to recommendations but is not required for basic functionality.
+If the `trading-signal` skill is installed, validate candidates against Smart Money activity.
 
 1.  **Fetch Smart Money Signals**: For each candidate token, query the trading signal API.
     *   **Skill**: `trading-signal`
@@ -154,17 +147,11 @@ If the `trading-signal` skill is installed, validate candidates against Smart Mo
 
 2.  **Cross-Reference**: Check if any candidate token appears in the Smart Money signal list.
     *   If a **BUY signal** exists for a candidate: Add +15 bonus to the grid score and mark as "Smart Money Backed".
-    *   If a **SELL signal** exists: Add a warning note but do not auto-exclude (grid trading profits from oscillation, not direction).
-
-3.  **Signal Enrichment**: When a match is found, include in the recommendation:
-    *   Signal direction (BUY/SELL)
-    *   Trigger price vs. current price
-    *   Maximum gain percentage (`maxGain`)
-    *   Exit rate (`exitRate`)
+    *   If a **SELL signal** exists: Add a warning note but do not auto-exclude.
 
 ### Step 4: Security Audit (Optional Enhancement)
 
-If the `query-token-audit` skill is installed, perform a security audit on each candidate before recommending it. This step protects users from honeypot tokens and rug pulls.
+If the `query-token-audit` skill is installed, perform a security audit on each candidate.
 
 1.  **Audit Token Contract**: For each candidate, query the token audit API.
     *   **Skill**: `query-token-audit`
@@ -182,18 +169,18 @@ If the `query-token-audit` skill is installed, perform a security audit on each 
         ```
 
 2.  **Risk Assessment**: Evaluate the audit results:
-    *   **Contract Risk**: Is the contract verified? Is it a proxy contract? Does the owner have excessive privileges?
-    *   **Trading Risk**: Are there abnormal buy/sell taxes (>5%)? Is trading restricted?
-    *   **Scam Risk**: Is it flagged as a honeypot? Is it on any blacklist?
+    *   **Contract Risk**: Is the contract verified? Is it a proxy contract?
+    *   **Trading Risk**: Are there abnormal buy/sell taxes (>5%)?
+    *   **Scam Risk**: Is it flagged as a honeypot?
 
 3.  **Decision Logic**:
-    *   **SAFE** (no critical risks): Proceed with recommendation, display "Security: PASSED".
-    *   **WARNING** (minor risks like unverified contract): Proceed but add a prominent risk warning.
-    *   **DANGEROUS** (honeypot, rug pull, or buy/sell tax >10%): **Auto-exclude** from recommendations and explain why.
+    *   **SAFE**: Proceed with recommendation, display "Security: PASSED".
+    *   **WARNING**: Proceed but add a prominent risk warning.
+    *   **DANGEROUS**: **Auto-exclude** from recommendations.
 
 ### Step 5: Fee Optimization (Optional Enhancement)
 
-If the `assets` skill is installed and the user has configured API keys, optimize trading fees.
+If the `assets` skill is installed, optimize trading fees.
 
 1.  **Check BNB Burn Status**: Query the BNB burn setting.
     *   **Skill**: `assets`
@@ -201,30 +188,22 @@ If the `assets` skill is installed and the user has configured API keys, optimiz
     *   **Method**: `GET`
     *   **Authentication**: Required (API Key + HMAC-SHA256 signature)
 
-2.  **Recommend Activation**: If `spotBNBBurn` is `false`, recommend the user to enable it:
-    > "I noticed your BNB fee discount is not enabled. Enabling it can save approximately 25% on trading fees, which significantly improves grid trading profitability. Would you like me to enable it?"
+2.  **Recommend Activation**: If `spotBNBBurn` is `false`, recommend the user to enable it.
 
-3.  **Check Account Balance**: Query the user's spot account balance.
-    *   **Skill**: `assets`
-    *   **API**: `/sapi/v1/asset/getUserAsset`
-    *   **Method**: `POST`
-    *   **Authentication**: Required
-
-4.  **Sufficiency Check**: Verify the user has enough USDT (or the quote asset) to fund the recommended grid. If insufficient, suggest a smaller grid count or a lower-priced pair.
+3.  **Check Account Balance**: Query the user's spot account balance via `assets` skill.
 
 ### Step 6: Output Generation
 
 Present the findings to the user in a structured format. The agent's response **MUST** include:
 
 *   **Recommended Coin**: `[Coin Name/USDT]`
-*   **Reason**: (e.g., "High volatility with a stable sideways trend over the past 14 days. RSI oscillating between 40-65. Smart Money BUY signal detected.")
-*   **Suggested Range**: `[Lower Price] - [Upper Price]` (Based on Bollinger Bands + Support/Resistance)
-*   **Grid Density**: `20-50` grids, based on volatility.
+*   **Reason**: (e.g., "High volatility with a stable sideways trend. Smart Money BUY signal detected.")
+*   **Suggested Range**: `[Lower Price] - [Upper Price]`
+*   **Grid Density**: `20-50` grids.
 *   **Risk Warning**: Stop-loss point (2% below lower range).
-*   **Security Status**: "PASSED" / "WARNING: [details]" (if audit skill is available)
-*   **Smart Money Signal**: "BUY signal at $X, maxGain Y%" (if signal skill is available)
-*   **BNB Fee Discount**: Recommend enabling if not already active.
-*   **Grid Score**: A composite score (0-115) combining volatility, RSI, trend, Smart Money, and security factors.
+*   **Security Status**: "PASSED" / "WARNING" (if audit skill is available)
+*   **Smart Money Signal**: "BUY signal at $X" (if signal skill is available)
+*   **Grid Score**: A composite score (0-115).
 
 ### Step 7: Breakout Alert (Continuous Monitoring)
 
@@ -232,42 +211,16 @@ After a grid recommendation is active, the agent should monitor for breakout con
 
 1.  **Monitor Price**: Periodically check if the current price approaches the grid range boundaries.
 2.  **Volume Spike Detection**: If trading volume increases by more than 200% compared to the 24-hour average while price is near the range edge, trigger an alert.
-3.  **Alert Message**:
-    > "WARNING: [COIN/USDT] is approaching the upper boundary of your grid range at [price]. Trading volume has spiked by [X]%. This may indicate a breakout. Consider adjusting your grid range or tightening your stop-loss."
-
-## Example Agent Dialogue
-
-> **User**: 帮我找个适合做网格的币
->
-> **Agent**: "好的，我正在为您扫描市场...
->
-> 经过对 200 个热门交易对的分析，我为您筛选出最佳候选：
->
-> **推荐币种: LINK/USDT**
->
-> | 指标 | 数值 |
-> | :--- | :--- |
-> | 当前价格 | 19.85 USDT |
-> | 建议区间 | 18.5 - 21.2 USDT |
-> | 网格数量 | 30 格 |
-> | 止损价位 | 18.13 USDT (区间下限 -2%) |
-> | 14日波动率 | 12.8% |
-> | RSI (14d) | 52.3 (理想震荡区间) |
-> | 趋势斜率 | -0.12% (横盘) |
-> | 聪明钱信号 | BUY @ $18.9, maxGain 8.2% |
-> | 安全审计 | PASSED (合约已验证, 无异常税率) |
-> | 综合评分 | 85/115 |
->
-> **推荐理由**: LINK 过去 14 天在 18.2-21.5 区间内往返 6 次，无明显单边突破迹象。RSI 稳定在 45-60 之间。Smart Money 在 $18.9 有买入信号，最大收益 8.2%，验证了底部支撑的有效性。合约安全审计通过，无蜜罐或异常税率风险。
->
-> **提示**: 建议开启 BNB 抵扣手续费以优化网格收益（可节省约 25% 手续费）。"
 
 ## Authentication
 
-This skill requires a Binance API key and secret for accessing authenticated endpoints via the `spot` and `assets` skills. The `trading-signal`, `query-token-audit`, and `crypto-market-rank` skills use public endpoints and do not require authentication.
+This skill requires a Binance API key and secret for accessing authenticated endpoints via the `spot` and `assets` skills. Set the following environment variables:
 
-Please refer to the `spot` skill's documentation for API key configuration instructions.
+```bash
+export BINANCE_API_KEY="your_api_key"
+export BINANCE_API_SECRET="your_secret_key"
+```
 
 ## User-Agent Header
 
-When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.0.0 (Skill)`.
+When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.1.0 (Skill)`.
