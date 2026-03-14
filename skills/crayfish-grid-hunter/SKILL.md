@@ -1,7 +1,7 @@
 ---
 name: crayfish-grid-hunter
 description: "Crayfish Grid Hunter is an AI-powered grid trading assistant for Binance. It scans the market for optimal grid trading candidates, validates them with Smart Money signals and security audits, then generates dynamic grid ranges with risk management parameters. Use this skill when users ask about grid trading opportunities, coin screening, grid range analysis, or 'which coin is good for grid trading'."
-metadata: {"version":"4.1.0","author":"joensmoon","openclaw":{"requires":{"env":["BINANCE_API_KEY"]},"primaryEnv":"BINANCE_API_KEY"}}
+metadata: {"version":"4.2.0","author":"joensmoon","openclaw":{"requires":{"env":[]},"optionalEnv":["BINANCE_API_KEY"]}}
 dependencies:
   skills:
     - name: spot
@@ -56,7 +56,7 @@ Before using this skill, the following official Binance skills **must** be insta
 | :--- | :--- | :--- |
 | `trading-signal` | `binance-web3/trading-signal` | Smart Money signal validation |
 | `query-token-audit` | `binance-web3/query-token-audit` | Token security audit before recommendation |
-| `assets` | `binance/assets` | Balance check, BNB fee discount |
+| `assets` | `binance/assets` | Balance check, BNB fee discount (Requires API Key) |
 
 **One-command install (all 5 skills):**
 
@@ -180,7 +180,7 @@ If the `query-token-audit` skill is installed, perform a security audit on each 
 
 ### Step 5: Fee Optimization (Optional Enhancement)
 
-If the `assets` skill is installed, optimize trading fees.
+If the `assets` skill is installed **AND** the user has provided a `BINANCE_API_KEY`, optimize trading fees.
 
 1.  **Check BNB Burn Status**: Query the BNB burn setting.
     *   **Skill**: `assets`
@@ -214,7 +214,9 @@ After a grid recommendation is active, the agent should monitor for breakout con
 
 ## Authentication
 
-This skill requires a Binance API key and secret for accessing authenticated endpoints via the `spot` and `assets` skills. Set the following environment variables:
+This skill **does not require** a Binance API key for its core market scanning and analysis functions. However, an API key is required for account-specific features like balance checks and fee optimization.
+
+If you wish to use these features, set the following environment variables:
 
 ```bash
 export BINANCE_API_KEY="your_api_key"
@@ -223,4 +225,4 @@ export BINANCE_API_SECRET="your_secret_key"
 
 ## User-Agent Header
 
-When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.1.0 (Skill)`.
+When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.2.0 (Skill)`.

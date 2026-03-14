@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Crayfish Grid Hunter v4.1.0 - Test Suite
+Crayfish Grid Hunter v4.2.0 - Test Suite
 =========================================
 Validates all API calls and technical indicator calculations described in
 the Crayfish Grid Hunter SKILL.md. Covers the full 7-step workflow:
@@ -9,7 +9,7 @@ the Crayfish Grid Hunter SKILL.md. Covers the full 7-step workflow:
   Step 2: Dynamic Range        (spot klines + indicators)
   Step 3: Smart Money          (trading-signal)
   Step 4: Security Audit       (query-token-audit)
-  Step 5: Fee Optimization     (assets - requires API key)
+  Step 5: Fee Optimization     (assets - OPTIONAL, requires API key)
   Step 6: Output Generation    (composite scoring)
   Step 7: Breakout Alert       (volume spike detection)
 """
@@ -29,7 +29,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "4.1.0"
+VERSION = "4.2.0"
 SPOT_ENDPOINTS = [
     "https://api.binance.com",
     "https://data-api.binance.vision"
@@ -335,13 +335,16 @@ def calculate_grid_parameters(symbol: str, klines: list):
 def run_tests():
     print(f"Crayfish Grid Hunter v{VERSION} Test Suite Starting...")
     
-    # [TEST 0] Real Dependency Check
-    print("[0] Checking dependencies...")
-    env_ok = os.getenv("BINANCE_API_KEY") is not None
-    record_test("Environment Check", "PASS" if env_ok else "WARN", "BINANCE_API_KEY not set")
+    # [TEST 0] Real Dependency Check (Optional)
+    print("[0] Checking optional dependencies...")
+    api_key = os.getenv("BINANCE_API_KEY")
+    if api_key:
+        record_test("Private API Access", "PASS", "BINANCE_API_KEY is set")
+    else:
+        record_test("Private API Access", "INFO", "BINANCE_API_KEY not set (Optional)")
     
     # [TEST 1] Spot Connectivity with Fallback
-    print("[1] Testing Spot API connectivity...")
+    print("[1] Testing Spot API connectivity (Public)...")
     url = get_spot_base_url()
     if url:
         record_test("Spot API Ping", "PASS", f"Using {url}")
@@ -349,7 +352,7 @@ def run_tests():
         record_test("Spot API Ping", "FAIL", "No working endpoint")
         
     # [TEST 2] Market Rank API
-    print("[2] Testing crypto-market-rank API...")
+    print("[2] Testing crypto-market-rank API (Public)...")
     tokens = fetch_market_rankings(size=20)
     if tokens:
         record_test("crypto-market-rank API", "PASS", f"Fetched {len(tokens)} tokens")
@@ -357,7 +360,7 @@ def run_tests():
         record_test("crypto-market-rank API", "WARN", "No tokens returned")
         
     # [TEST 3] Smart Money API
-    print("[3] Testing trading-signal API...")
+    print("[3] Testing trading-signal API (Public)...")
     signals = fetch_smart_money_signals(chain_id="CT_501", size=10)
     if signals:
         record_test("trading-signal API", "PASS", f"Fetched {len(signals)} signals")
@@ -365,7 +368,7 @@ def run_tests():
         record_test("trading-signal API", "WARN", "No signals returned")
         
     # [TEST 4] Token Audit API
-    print("[4] Testing query-token-audit API...")
+    print("[4] Testing query-token-audit API (Public)...")
     # Audit WBNB on BSC
     audit = audit_token("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", "56")
     if audit:
@@ -427,7 +430,7 @@ def run_tests():
     print("FINAL TEST SUMMARY")
     print("="*60)
     for r in _test_results:
-        icon = "✓" if r["status"] == "PASS" else "!" if r["status"] == "WARN" else "✗"
+        icon = "✓" if r["status"] == "PASS" else "i" if r["status"] == "INFO" else "!" if r["status"] == "WARN" else "✗"
         print(f"[{icon}] {r['name']:<25}: {r['status']:<6} {r['detail']}")
     print("="*60)
 

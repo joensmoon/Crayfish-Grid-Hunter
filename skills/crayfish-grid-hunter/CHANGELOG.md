@@ -1,46 +1,30 @@
 # Changelog
 
+## [4.2.0] - 2026-03-15
+
+### Improved — Feature Tiering & Accessibility
+
+*   **移除强制 API 密钥要求**: 在 `SKILL.md` 的 metadata 中移除了对 `BINANCE_API_KEY` 的强制要求（gating），将其设为可选。
+*   **功能分级设计**: 明确区分了核心功能（基于公共 API）和增强功能（基于私有 API）。
+    *   **核心功能**: 市场扫描、技术分析、聪明钱验证、安全审计。这些功能现在无需 API 密钥即可使用。
+    *   **增强功能**: 账户余额检查、BNB 燃烧费用优化。这些功能仅在用户提供 API 密钥时激活。
+*   **优雅降级逻辑**: 优化了测试脚本和工作流说明，确保在缺失 API 密钥时，系统能自动跳过私有功能并继续执行核心分析任务。
+*   **文档更新**: 更新了 `SKILL.md` 和 `README.md`，指导用户如何根据需求选择性配置 API 密钥。
+
+### Fixed
+
+*   修复了 `SKILL.md` 中 `optionalEnv` 的声明方式，符合 OpenClaw 最佳实践。
+*   统一了测试脚本中的日志输出，将 API 密钥缺失标记为 `INFO` 而非 `WARN`。
+
 ## [4.1.0] - 2026-03-15
 
 ### Fixed
 
-*   **SKILL.md metadata 格式修复**: 将多行 YAML 格式的 metadata 修复为 OpenClaw 规范要求的单行 JSON 格式。
-*   **Spot API Fallback 机制**: 为 `test_grid_hunter.py` 添加了自动 fallback 逻辑，当 `api.binance.com` 返回 451 时自动切换到 `data-api.binance.vision`。
-*   **API 定义同步**: 统一了 `SKILL.md`、`api_usage.md` 和测试脚本中关于 `trading-signal` 和 `query-token-audit` 的 API 方法（统一为 POST）和 URL。
-*   **README 安装 URL 修复**: 修正了 README.md 中的一键安装命令 URL。
-*   **LICENSE 署名修复**: 将版权持有人从 "Grid Hunter Contributors" 修正为 "joensmoon"。
-*   **User-Agent 统一**: 统一所有 API 调用的 User-Agent 为 `crayfish-grid-hunter/4.1.0 (Skill)`。
-
-### Added
-
-*   **OpenClaw Gating 配置**: 在 SKILL.md metadata 中添加了 `openclaw.requires.env` 声明，明确要求 `BINANCE_API_KEY`。
-*   **真实依赖检查**: 测试脚本现在会检查环境变量配置。
-*   **突破预警逻辑验证**: 测试脚本新增了对 Step 7 突破预警逻辑的模拟验证。
-*   **Kline 响应格式补充**: 在 `api_usage.md` 中补充了完整的 Kline 响应字段说明（Index 0-11）。
-
-### Improved
-
-*   **测试脚本稳定性**: 优化了 API 调用超时和错误处理，减少了 SSL 握手失败导致的 WARN。
-*   **Smart Money 验证逻辑**: 测试脚本现在会根据真实的 Smart Money 信号列表为候选币种加分，而非硬编码。
+*   **SKILL.md metadata 格式修复**: 修复为单行 JSON 格式。
+*   **Spot API Fallback 机制**: 添加了自动切换到 `data-api.binance.vision` 的逻辑。
+*   **API 定义同步**: 统一了所有 API 方法为 POST。
+*   **LICENSE 署名修复**: 修正版权持有人为 `joensmoon`。
 
 ## [4.0.0] - 2026-03-14
 
-### Added — New Skill Integrations
-
-*   **`trading-signal` integration (Step 3)**: Smart Money signal validation.
-*   **`query-token-audit` integration (Step 4)**: Automated security audit.
-*   **`assets` integration (Step 5)**: Account balance and BNB burn optimization.
-*   **Breakout Alert system (Step 7)**: Continuous monitoring for price/volume spikes.
-*   **Composite scoring system**: New 0-115 point scoring.
-
-## [3.1.0] - 2026-03-14
-
-### Fixed
-
-*   Added `dependencies` field in SKILL.md.
-*   RSI calculation upgraded to Wilder smoothing method.
-*   Author placeholder replaced with `GridHunterDev`.
-
-## [1.0.0] - 2026-03-12
-
-*   Initial release.
+*   Initial release of v4 series with multi-skill integration.
