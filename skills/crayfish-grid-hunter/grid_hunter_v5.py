@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "5.2.0"
+VERSION = "5.3.0"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"
@@ -53,6 +53,7 @@ MAX_GRID_PROFIT = 0.012  # 1.2% maximum per-grid profit after fees
 DEFAULT_LEVERAGE = 5     # Conservative default leverage for grid trading
 MAX_ACCOUNT_EXPOSURE = 0.08  # Max 8% of account per grid position
 
+
 # Category A thresholds
 CONTRACT_RECENT_DAYS = 90        # Contract onboarded within 90 days
 VOLUME_SHRINK_RATIO = 0.50       # 24h vol < 50% of 7-day average
@@ -65,6 +66,91 @@ MCAP_MIN = 200_000_000           # $200M minimum market cap
 MCAP_MAX = 1_000_000_000         # $1B maximum market cap
 TURNOVER_MIN = 0.50              # 24h volume / market cap > 50%
 HIGH_VOL_RV_MIN = 15.0           # Realized volatility > 15% annualized
+
+
+# ============================================================
+# User-Customizable Parameters (v5.3)
+# ============================================================
+
+@dataclass
+class UserConfig:
+    """
+    User-customizable screening and grid parameters.
+
+    All fields have sensible defaults matching the standard strategy.
+    Users can override any subset of parameters via natural language:
+
+        "帮我筛选次新币网格，合约上线天数改为60天，杠杆3倍"
+        → UserConfig(contract_recent_days=60, leverage=3)
+
+        "高波动套利，市值范围5亿到20亿，换手率30%以上"
+        → UserConfig(mcap_min=500_000_000, mcap_max=2_000_000_000, turnover_min=0.30)
+    """
+    # --- Category A: Recent Contract Listings ---
+    contract_recent_days: int = CONTRACT_RECENT_DAYS
+    volume_shrink_ratio: float = VOLUME_SHRINK_RATIO
+    atr_sideways_pct: float = ATR_SIDEWAYS_PCT
+    bb_width_sideways: float = BB_WIDTH_SIDEWAYS
+    adx_sideways: float = ADX_SIDEWAYS
+
+    # --- Category B: High Volatility Arbitrage ---
+    mcap_min: float = MCAP_MIN
+    mcap_max: float = MCAP_MAX
+    turnover_min: float = TURNOVER_MIN
+    rv_min: float = HIGH_VOL_RV_MIN
+    min_quote_volume: float = 10_000_000
+
+    # --- Grid Parameters ---
+    leverage: int = DEFAULT_LEVERAGE
+    min_grid_profit: float = MIN_GRID_PROFIT
+    max_grid_profit: float = MAX_GRID_PROFIT
+    stop_loss_pct: float = 5.0
+    max_exposure: float = MAX_ACCOUNT_EXPOSURE
+
+    # --- Screening ---
+    max_symbols: int = 200
+    top_n: int = 3
+
+    # --- Backtest ---
+    backtest_days: int = 30
+    backtest_interval: str = "1h"
+
+    def validate(self) -> List[str]:
+        """Validate user config and return list of warnings."""
+        warnings = []
+        if self.leverage > 20:
+            warnings.append(f"杠杆{self.leverage}×过高，建议不超过20×")
+        if self.leverage < 1:
+            warnings.append("杠杆必须≥1")
+        if self.stop_loss_pct < 1:
+            warnings.append(f"止损{self.stop_loss_pct}%过小，可能频繁触发")
+        if self.stop_loss_pct > 20:
+            warnings.append(f"止损{self.stop_loss_pct}%过大，风险控制不足")
+        if self.min_grid_profit < 0.003:
+            warnings.append(f"单格利润{self.min_grid_profit*100:.1f}%过低，可能无法覆盖手续费")
+        if self.mcap_min >= self.mcap_max:
+            warnings.append(f"市值下限(${self.mcap_min/1e6:.0f}M)≥上限(${self.mcap_max/1e6:.0f}M)")
+        if self.turnover_min > 5.0:
+            warnings.append(f"换手率{self.turnover_min*100:.0f}%阈值过高，可能无结果")
+        if self.top_n < 1:
+            warnings.append("top_n必须≥1")
+        return warnings
+
+    def to_display(self) -> str:
+        """Format config as readable summary."""
+        lines = [
+            "当前自定义参数:",
+            f"  Category A: 合约≤{self.contract_recent_days}天, 量缩<{self.volume_shrink_ratio*100:.0f}%, ATR<{self.atr_sideways_pct}%, BB<{self.bb_width_sideways}%, ADX<{self.adx_sideways}",
+            f"  Category B: 市值${self.mcap_min/1e6:.0f}M-${self.mcap_max/1e6:.0f}M, 换手率>{self.turnover_min*100:.0f}%, RV>{self.rv_min}%",
+            f"  网格: {self.leverage}×杠杆, 利润{self.min_grid_profit*100:.1f}%-{self.max_grid_profit*100:.1f}%, 止损{self.stop_loss_pct}%",
+            f"  筛选: Top {self.top_n}, 分析前{self.max_symbols}个币种",
+        ]
+        return "\n".join(lines)
+
+
+# Default config instance
+DEFAULT_CONFIG = UserConfig()
+
 
 # ============================================================
 # Data Structures
@@ -582,6 +668,7 @@ def screen_recent_contracts(
     snapshots: Dict[str, MarketSnapshot],
     technicals: Dict[str, TechnicalAnalysis],
     top_n: int = 3,
+    config: Optional[UserConfig] = None,
 ) -> List[Tuple[FuturesSymbol, MarketSnapshot, TechnicalAnalysis, float, str]]:
     """
     Category A — 次新币横盘类 (Recent Contract Listings)
@@ -591,9 +678,11 @@ def screen_recent_contracts(
       2. Volume shrinkage: 24h volume < 50% of 7-day average
       3. Sideways: ATR(14) < 2% OR BB_width < 5% OR ADX(14) < 20
     """
+    cfg = config or DEFAULT_CONFIG
     candidates = []
     for sym in symbols:
-        if not sym.is_recent_contract:
+        # Use config threshold for contract age
+        if sym.contract_age_days > cfg.contract_recent_days + 0.01:
             continue
         snap = snapshots.get(sym.symbol)
         tech = technicals.get(sym.symbol)
@@ -602,15 +691,15 @@ def screen_recent_contracts(
         if snap.last_price <= 0:
             continue
 
-        # Volume shrinkage check
+        # Volume shrinkage check (using config threshold)
         vol_ratio = tech.volume_shrinkage_ratio
-        has_volume_shrinkage = vol_ratio < VOLUME_SHRINK_RATIO
+        has_volume_shrinkage = vol_ratio < cfg.volume_shrink_ratio
 
-        # Sideways check: at least one indicator must confirm
+        # Sideways check: at least one indicator must confirm (using config thresholds)
         is_sideways = (
-            tech.atr_14_pct < ATR_SIDEWAYS_PCT or
-            tech.bb_width_pct < BB_WIDTH_SIDEWAYS or
-            tech.adx_14 < ADX_SIDEWAYS
+            tech.atr_14_pct < cfg.atr_sideways_pct or
+            tech.bb_width_pct < cfg.bb_width_sideways or
+            tech.adx_14 < cfg.adx_sideways
         )
 
         if not (has_volume_shrinkage and is_sideways):
@@ -618,15 +707,15 @@ def screen_recent_contracts(
 
         # Score: sideways strength + volume shrinkage + recency
         sideways_score = 0.0
-        sideways_score += max(0, (ATR_SIDEWAYS_PCT - tech.atr_14_pct) / ATR_SIDEWAYS_PCT * 25)
-        sideways_score += max(0, (BB_WIDTH_SIDEWAYS - tech.bb_width_pct) / BB_WIDTH_SIDEWAYS * 25)
-        sideways_score += max(0, (ADX_SIDEWAYS - tech.adx_14) / ADX_SIDEWAYS * 20) if tech.adx_14 < ADX_SIDEWAYS else 0
+        sideways_score += max(0, (cfg.atr_sideways_pct - tech.atr_14_pct) / cfg.atr_sideways_pct * 25)
+        sideways_score += max(0, (cfg.bb_width_sideways - tech.bb_width_pct) / cfg.bb_width_sideways * 25)
+        sideways_score += max(0, (cfg.adx_sideways - tech.adx_14) / cfg.adx_sideways * 20) if tech.adx_14 < cfg.adx_sideways else 0
 
         # Volume shrinkage bonus: more shrinkage = better consolidation
-        shrink_score = max(0, (VOLUME_SHRINK_RATIO - vol_ratio) / VOLUME_SHRINK_RATIO * 15)
+        shrink_score = max(0, (cfg.volume_shrink_ratio - vol_ratio) / cfg.volume_shrink_ratio * 15)
 
         # Recency bonus
-        recency_bonus = max(0, (CONTRACT_RECENT_DAYS - sym.contract_age_days) / CONTRACT_RECENT_DAYS * 15)
+        recency_bonus = max(0, (cfg.contract_recent_days - sym.contract_age_days) / cfg.contract_recent_days * 15)
 
         score = sideways_score + shrink_score + recency_bonus
 
@@ -647,6 +736,7 @@ def screen_high_volatility(
     technicals: Dict[str, TechnicalAnalysis],
     token_data: Dict[str, TokenMarketData],
     top_n: int = 3,
+    config: Optional[UserConfig] = None,
 ) -> List[Tuple[FuturesSymbol, MarketSnapshot, TechnicalAnalysis, float, str]]:
     """
     Category B — 高波动套利类 (High Volatility Arbitrage)
@@ -657,6 +747,7 @@ def screen_high_volatility(
       3. Realized volatility > 15% annualized
       4. Volume confirmation: quoteVolume > $10M (active trading)
     """
+    cfg = config or DEFAULT_CONFIG
     candidates = []
     for sym in symbols:
         snap = snapshots.get(sym.symbol)
@@ -667,28 +758,28 @@ def screen_high_volatility(
         if snap.last_price <= 0:
             continue
 
-        # Market cap filter (from query-token-info)
+        # Market cap filter (using config thresholds)
         mcap = 0.0
         if tdata and tdata.market_cap > 0:
             mcap = tdata.market_cap
         else:
             continue  # No market cap data → skip
 
-        if not (MCAP_MIN <= mcap <= MCAP_MAX):
+        if not (cfg.mcap_min <= mcap <= cfg.mcap_max):
             continue
 
-        # Turnover rate: use futures quoteVolume / market cap
+        # Turnover rate: use futures quoteVolume / market cap (using config threshold)
         turnover = snap.quote_volume_24h / mcap if mcap > 0 else 0
-        if turnover < TURNOVER_MIN:
+        if turnover < cfg.turnover_min:
             continue
 
-        # Realized volatility
+        # Realized volatility (using config threshold)
         rv = tech.realized_volatility_pct
-        if rv < HIGH_VOL_RV_MIN:
+        if rv < cfg.rv_min:
             continue
 
-        # Volume confirmation: at least $10M in 24h quote volume
-        if snap.quote_volume_24h < 10_000_000:
+        # Volume confirmation (using config threshold)
+        if snap.quote_volume_24h < cfg.min_quote_volume:
             continue
 
         # Score
@@ -817,6 +908,7 @@ def calculate_geometric_grid(
 def run_dual_category_scan(
     max_symbols: int = 200,
     top_n_each: int = 3,
+    config: Optional[UserConfig] = None,
 ) -> Tuple[List[GridParameters], List[GridParameters]]:
     """Full dual-category screening pipeline."""
     print(f"[Step 0] Fetching exchange info (USDS-M perpetuals)...")
@@ -866,16 +958,19 @@ def run_dual_category_scan(
         if tdata:
             token_data[sym.base_asset] = tdata
 
+    cfg = config or DEFAULT_CONFIG
+
     print(f"[Step 3] Running Category A screening (次新币横盘类)...")
-    cat_a_raw = screen_recent_contracts(active_symbols, snapshots, technicals, top_n=top_n_each)
+    cat_a_raw = screen_recent_contracts(active_symbols, snapshots, technicals, top_n=top_n_each, config=cfg)
 
     print(f"[Step 4] Running Category B screening (高波动套利类)...")
-    cat_b_raw = screen_high_volatility(active_symbols, snapshots, technicals, token_data, top_n=top_n_each)
+    cat_b_raw = screen_high_volatility(active_symbols, snapshots, technicals, token_data, top_n=top_n_each, config=cfg)
 
     print(f"[Step 5] Calculating Geometric Grid parameters...")
     cat_a_results = []
     for sym, snap, tech, score, reason in cat_a_raw:
-        gp = calculate_geometric_grid(sym.symbol, "recent_contract", snap, tech, score, reason)
+        gp = calculate_geometric_grid(sym.symbol, "recent_contract", snap, tech, score, reason,
+                                       leverage=cfg.leverage)
         cat_a_results.append(gp)
 
     cat_b_results = []
@@ -886,6 +981,7 @@ def run_dual_category_scan(
         gp = calculate_geometric_grid(
             sym.symbol, "high_volatility", snap, tech, score, reason,
             market_cap=mcap, turnover_rate=turnover,
+            leverage=cfg.leverage,
         )
         cat_b_results.append(gp)
 

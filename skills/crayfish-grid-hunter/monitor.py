@@ -633,7 +633,7 @@ class GridPerformanceMonitor:
 
         return {
             "generated_at": datetime.now().isoformat(),
-            "version": "4.4.0",
+            "version": "5.3.0",
             "summary": {
                 "active_positions": len(self.positions),
                 "total_alerts_generated": len(self.alert_history),
@@ -844,6 +844,7 @@ def create_monitor(
     stop_loss_proximity_critical_pct: float = 2.0,
     volume_spike_multiplier: float = 2.5,
     api_latency_high_ms: float = 3000.0,
+    webhook_url: Optional[str] = None,
 ) -> GridPerformanceMonitor:
     """Create a pre-configured monitor with commonly adjusted thresholds."""
     thresholds = MonitorThresholds(
@@ -854,4 +855,360 @@ def create_monitor(
         volume_spike_multiplier=volume_spike_multiplier,
         api_latency_high_ms=api_latency_high_ms,
     )
-    return GridPerformanceMonitor(thresholds=thresholds)
+    monitor = GridPerformanceMonitor(thresholds=thresholds)
+    if webhook_url:
+        monitor.set_webhook(webhook_url)
+    return monitor
+
+
+# ============================================================
+# v5.3 — Enhanced Real-Time Performance Monitoring
+# ============================================================
+
+@dataclass
+class PerformanceSnapshot:
+    """Point-in-time snapshot for performance tracking history."""
+    timestamp: datetime
+    symbol: str
+    price: float
+    pnl_pct: float
+    fill_rate: float
+    volatility_regime: str  # "low" | "medium" | "high" | "extreme"
+    funding_rate: float = 0.0
+    grid_efficiency: float = 0.0  # fills_per_hour
+
+
+class VolatilityRegime(Enum):
+    LOW = "low"           # < 5% 24h vol
+    MEDIUM = "medium"     # 5-15%
+    HIGH = "high"         # 15-30%
+    EXTREME = "extreme"   # > 30%
+
+    @classmethod
+    def from_volatility(cls, vol_24h_pct: float) -> 'VolatilityRegime':
+        if vol_24h_pct >= 30:
+            return cls.EXTREME
+        elif vol_24h_pct >= 15:
+            return cls.HIGH
+        elif vol_24h_pct >= 5:
+            return cls.MEDIUM
+        return cls.LOW
+
+
+class RealTimeMonitor:
+    """
+    v5.3 Enhanced Real-Time Monitor with:
+    - Performance history tracking (time-series snapshots)
+    - Volatility regime detection & transition alerts
+    - Auto grid adjustment suggestions
+    - Webhook notification support
+    - Aggregated performance statistics
+    """
+
+    def __init__(self, base_monitor: GridPerformanceMonitor,
+                 snapshot_interval_sec: int = 300,
+                 max_history: int = 288):
+        self.base = base_monitor
+        self.snapshot_interval = snapshot_interval_sec
+        self.max_history = max_history  # 288 × 5min = 24h default
+        self._history: Dict[str, deque] = {}  # symbol → deque[PerformanceSnapshot]
+        self._vol_regimes: Dict[str, VolatilityRegime] = {}
+        self._last_snapshot_time: Dict[str, float] = {}
+        self._webhook_url: Optional[str] = None
+        self._webhook_headers: Dict[str, str] = {"Content-Type": "application/json"}
+        self._notification_callbacks: List[Callable] = []
+
+    def set_webhook(self, url: str, headers: Optional[Dict[str, str]] = None):
+        """Configure webhook URL for external alert notifications."""
+        self._webhook_url = url
+        if headers:
+            self._webhook_headers.update(headers)
+
+    def add_notification_callback(self, callback: Callable):
+        """Register a callback function for alert notifications."""
+        self._notification_callbacks.append(callback)
+
+    def record_snapshot(self, symbol: str, price: float, pnl_pct: float,
+                        fill_rate: float, vol_24h_pct: float,
+                        funding_rate: float = 0.0,
+                        total_fills: int = 0, runtime_hours: float = 0.0):
+        """Record a performance snapshot for time-series tracking."""
+        now = time.time()
+        last = self._last_snapshot_time.get(symbol, 0)
+        if now - last < self.snapshot_interval:
+            return  # Too soon, skip
+
+        regime = VolatilityRegime.from_volatility(vol_24h_pct)
+        efficiency = total_fills / max(runtime_hours, 0.01)
+
+        snap = PerformanceSnapshot(
+            timestamp=datetime.now(),
+            symbol=symbol,
+            price=price,
+            pnl_pct=pnl_pct,
+            fill_rate=fill_rate,
+            volatility_regime=regime.value,
+            funding_rate=funding_rate,
+            grid_efficiency=efficiency,
+        )
+
+        if symbol not in self._history:
+            self._history[symbol] = deque(maxlen=self.max_history)
+        self._history[symbol].append(snap)
+        self._last_snapshot_time[symbol] = now
+
+        # Detect volatility regime transition
+        prev_regime = self._vol_regimes.get(symbol)
+        if prev_regime and prev_regime != regime:
+            self._on_regime_change(symbol, prev_regime, regime, vol_24h_pct)
+        self._vol_regimes[symbol] = regime
+
+    def _on_regime_change(self, symbol: str, old: VolatilityRegime,
+                          new: VolatilityRegime, vol_pct: float):
+        """Handle volatility regime transition — generate alert and suggestion."""
+        direction = "升高" if new.value > old.value else "降低"
+        level = AlertLevel.HIGH if new in (VolatilityRegime.EXTREME, VolatilityRegime.LOW) else AlertLevel.MEDIUM
+
+        alert = Alert(
+            id=str(uuid.uuid4())[:8],
+            level=level,
+            category="volatility_regime",
+            symbol=symbol,
+            message=(
+                f"波动率regime变化: {old.value} → {new.value} "
+                f"(24h vol={vol_pct:.1f}%) — 建议{self._get_regime_suggestion(new)}"
+            ),
+            value=vol_pct,
+            threshold=0.0,
+        )
+        self.base.alert_history.append(alert)
+        self._dispatch_notification(alert)
+
+    def _get_regime_suggestion(self, regime: VolatilityRegime) -> str:
+        """Get grid adjustment suggestion based on volatility regime."""
+        suggestions = {
+            VolatilityRegime.LOW: "缩小网格区间并减少网格数量至15-20，或暂停网格等待波动率回升",
+            VolatilityRegime.MEDIUM: "维持当前网格参数，网格数量20-30为宜",
+            VolatilityRegime.HIGH: "适当扩大网格区间，网格数量增至40，确保单格利润≥0.8%",
+            VolatilityRegime.EXTREME: "立即扩大网格区间至±15%，降低杠杆至3×，考虑减仓",
+        }
+        return suggestions.get(regime, "")
+
+    def suggest_grid_adjustment(self, symbol: str) -> Optional[Dict]:
+        """Analyze recent performance and suggest grid parameter adjustments."""
+        history = self._history.get(symbol)
+        if not history or len(history) < 6:  # Need at least 30 min of data
+            return None
+
+        recent = list(history)[-12:]  # Last hour
+        avg_pnl = sum(s.pnl_pct for s in recent) / len(recent)
+        avg_fill = sum(s.fill_rate for s in recent) / len(recent)
+        avg_efficiency = sum(s.grid_efficiency for s in recent) / len(recent)
+        pnl_trend = recent[-1].pnl_pct - recent[0].pnl_pct
+        current_regime = self._vol_regimes.get(symbol, VolatilityRegime.MEDIUM)
+
+        suggestion = {
+            "symbol": symbol,
+            "current_regime": current_regime.value,
+            "avg_pnl_1h": round(avg_pnl, 4),
+            "avg_fill_rate_1h": round(avg_fill, 2),
+            "avg_efficiency_fills_per_hour": round(avg_efficiency, 2),
+            "pnl_trend_1h": round(pnl_trend, 4),
+            "actions": [],
+        }
+
+        # Low fill rate → grid too wide
+        if avg_fill < 10:
+            suggestion["actions"].append({
+                "type": "tighten_range",
+                "reason": f"成交率仅{avg_fill:.1f}%，网格区间可能过宽",
+                "recommendation": "缩小网格区间20-30%，或增加网格密度",
+            })
+
+        # Declining PnL → market trending against grid
+        if pnl_trend < -1.0:
+            suggestion["actions"].append({
+                "type": "shift_range",
+                "reason": f"PnL 1小时内下降{abs(pnl_trend):.2f}%，市场可能正在趋势化",
+                "recommendation": "考虑移动网格中心价格至当前价，或暂停网格",
+            })
+
+        # High efficiency + positive PnL → grid is working well
+        if avg_efficiency > 5 and avg_pnl > 0:
+            suggestion["actions"].append({
+                "type": "maintain",
+                "reason": f"网格运行良好：每小时{avg_efficiency:.1f}次成交，PnL +{avg_pnl:.2f}%",
+                "recommendation": "维持当前参数，继续监控",
+            })
+
+        # Extreme volatility → reduce risk
+        if current_regime == VolatilityRegime.EXTREME:
+            suggestion["actions"].append({
+                "type": "reduce_risk",
+                "reason": "当前处于极端波动率regime",
+                "recommendation": "降低杠杆至3×，扩大止损距离至8%，减少仓位至5%",
+            })
+
+        return suggestion
+
+    def get_performance_stats(self, symbol: str) -> Optional[Dict]:
+        """Calculate aggregated performance statistics from snapshot history."""
+        history = self._history.get(symbol)
+        if not history or len(history) < 2:
+            return None
+
+        snaps = list(history)
+        pnls = [s.pnl_pct for s in snaps]
+        prices = [s.price for s in snaps]
+        efficiencies = [s.grid_efficiency for s in snaps]
+
+        # Time range
+        start_time = snaps[0].timestamp
+        end_time = snaps[-1].timestamp
+        duration_hours = (end_time - start_time).total_seconds() / 3600
+
+        # PnL stats
+        max_pnl = max(pnls)
+        min_pnl = min(pnls)
+        current_pnl = pnls[-1]
+
+        # Max drawdown from peak
+        peak = pnls[0]
+        max_drawdown = 0.0
+        for p in pnls:
+            if p > peak:
+                peak = p
+            dd = peak - p
+            if dd > max_drawdown:
+                max_drawdown = dd
+
+        # Price range
+        price_high = max(prices)
+        price_low = min(prices)
+
+        # Regime distribution
+        regime_counts: Dict[str, int] = {}
+        for s in snaps:
+            regime_counts[s.volatility_regime] = regime_counts.get(s.volatility_regime, 0) + 1
+        total = len(snaps)
+        regime_pcts = {k: round(v / total * 100, 1) for k, v in regime_counts.items()}
+
+        return {
+            "symbol": symbol,
+            "tracking_duration_hours": round(duration_hours, 2),
+            "total_snapshots": len(snaps),
+            "pnl": {
+                "current": round(current_pnl, 4),
+                "max": round(max_pnl, 4),
+                "min": round(min_pnl, 4),
+                "max_drawdown": round(max_drawdown, 4),
+            },
+            "price": {
+                "current": round(prices[-1], 6),
+                "high": round(price_high, 6),
+                "low": round(price_low, 6),
+                "range_pct": round((price_high - price_low) / price_low * 100, 2) if price_low > 0 else 0,
+            },
+            "efficiency": {
+                "avg_fills_per_hour": round(sum(efficiencies) / len(efficiencies), 2),
+                "max_fills_per_hour": round(max(efficiencies), 2),
+            },
+            "volatility_regime_distribution": regime_pcts,
+        }
+
+    def _dispatch_notification(self, alert: Alert):
+        """Send alert via webhook and registered callbacks."""
+        # Webhook
+        if self._webhook_url and alert.level in (AlertLevel.CRITICAL, AlertLevel.HIGH):
+            try:
+                import requests as req
+                payload = {
+                    "source": "crayfish-grid-hunter",
+                    "level": alert.level.value,
+                    "symbol": alert.symbol,
+                    "message": alert.message,
+                    "timestamp": alert.timestamp.isoformat(),
+                }
+                req.post(self._webhook_url, json=payload,
+                         headers=self._webhook_headers, timeout=5)
+            except Exception:
+                pass  # Non-blocking — don't let notification failure affect monitoring
+
+        # Callbacks
+        for cb in self._notification_callbacks:
+            try:
+                cb(alert)
+            except Exception:
+                pass
+
+    def run_enhanced_checks(self) -> List[Alert]:
+        """Run base checks + enhanced regime/adjustment checks."""
+        alerts = self.base.run_checks()
+        # Dispatch CRITICAL/HIGH alerts via webhook
+        for a in alerts:
+            if a.level in (AlertLevel.CRITICAL, AlertLevel.HIGH):
+                self._dispatch_notification(a)
+        return alerts
+
+    def format_dashboard(self) -> str:
+        """Generate a real-time dashboard view with performance stats."""
+        lines = [
+            "=" * 65,
+            f"  CRAYFISH GRID HUNTER v5.3 — REAL-TIME DASHBOARD",
+            f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "=" * 65,
+        ]
+
+        for symbol in self.base.positions:
+            pos = self.base.positions[symbol]
+            regime = self._vol_regimes.get(symbol, VolatilityRegime.MEDIUM)
+            stats = self.get_performance_stats(symbol)
+
+            status = "IN RANGE" if pos.price_in_range else "OUT OF RANGE"
+            pnl_sign = "+" if pos.pnl_pct >= 0 else ""
+
+            lines.append(f"\n  [{symbol}] {status} | Regime: {regime.value.upper()}")
+            lines.append(f"    Price: {pos.current_price:.4f}  "
+                         f"Range: [{pos.grid_lower:.4f}, {pos.grid_upper:.4f}]")
+            lines.append(f"    PnL: {pnl_sign}{pos.pnl_pct:.2f}%  "
+                         f"Fill Rate: {pos.fill_rate:.1f}%  "
+                         f"Runtime: {pos.runtime_hours:.1f}h")
+
+            if stats:
+                lines.append(f"    Stats: Max PnL={stats['pnl']['max']:.2f}%  "
+                             f"Max DD={stats['pnl']['max_drawdown']:.2f}%  "
+                             f"Avg Fills/h={stats['efficiency']['avg_fills_per_hour']:.1f}")
+
+            # Grid adjustment suggestion
+            suggestion = self.suggest_grid_adjustment(symbol)
+            if suggestion and suggestion["actions"]:
+                for action in suggestion["actions"][:2]:  # Show top 2
+                    lines.append(f"    Suggest: [{action['type']}] {action['recommendation']}")
+
+        # Alert summary
+        recent = self.base.alert_history[-5:]
+        if recent:
+            lines.append(f"\n  RECENT ALERTS")
+            for a in recent:
+                ts = a.timestamp.strftime("%H:%M:%S")
+                lines.append(f"    [{ts}] [{a.level.value:<8}] {a.symbol}: {a.message[:60]}")
+
+        lines.append("\n" + "=" * 65)
+        return "\n".join(lines)
+
+
+def create_realtime_monitor(
+    webhook_url: Optional[str] = None,
+    snapshot_interval_sec: int = 300,
+    **kwargs,
+) -> RealTimeMonitor:
+    """Factory for creating a v5.3 enhanced real-time monitor."""
+    base = create_monitor(**{k: v for k, v in kwargs.items()
+                            if k in ('pnl_loss_critical_pct', 'pnl_loss_high_pct',
+                                     'boundary_proximity_critical_pct',
+                                     'stop_loss_proximity_critical_pct',
+                                     'volume_spike_multiplier', 'api_latency_high_ms')})
+    rt = RealTimeMonitor(base, snapshot_interval_sec=snapshot_interval_sec)
+    if webhook_url:
+        rt.set_webhook(webhook_url)
+    return rt
