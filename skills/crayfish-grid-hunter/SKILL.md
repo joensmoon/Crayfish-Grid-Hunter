@@ -1,7 +1,7 @@
 ---
 name: crayfish-grid-hunter
 description: "Crayfish Grid Hunter is an AI-powered grid trading assistant for Binance. It scans the market for optimal grid trading candidates, validates them with Smart Money signals and security audits, then generates dynamic grid ranges with risk management parameters. Use this skill when users ask about grid trading opportunities, coin screening, grid range analysis, or 'which coin is good for grid trading'."
-metadata: {"version":"4.2.0","author":"joensmoon","openclaw":{"requires":{"env":[]},"optionalEnv":["BINANCE_API_KEY"]}}
+metadata: {"version":"4.3.0","author":"joensmoon","openclaw":{"requires":{"env":[]},"optionalEnv":["BINANCE_API_KEY"]}}
 dependencies:
   skills:
     - name: spot
@@ -95,15 +95,16 @@ Scan the market to identify high-volume tokens with grid-friendly characteristic
         }
         ```
 
-2.  **Filter for Grid Candidates**: For each token, fetch 14-day daily Kline data.
+2.  **Filter for Grid Candidates**: For each token, fetch **30-day daily** Kline data.
     *   **Skill**: `spot`
     *   **API**: `/api/v3/klines`
     *   **Base URL**: `https://api.binance.com` (primary) or `https://data-api.binance.vision` (fallback)
-    *   **Parameters**: `symbol=<symbol>`, `interval=1d`, `limit=14`
+    *   **Parameters**: `symbol=<symbol>`, `interval=1d`, `limit=30`
+    *   **Why 30?** RSI uses the Wilder Smoothing method with a 14-period window. This requires at least 15 price deltas for a valid calculation. Fetching 30 candles provides 29 deltas — 14 for the initial average and 15 rolling updates — ensuring the RSI reflects real market momentum rather than defaulting to a neutral value.
 
 3.  **AI Evaluation**: Process the data to identify coins with **high volatility but a stable (sideways) trend**.
-    *   **Volatility Check**: Calculate ATR over 14 days. Higher ATR = higher volatility.
-    *   **Trend Check**: Calculate price trend slope over 7 and 14 days. Slope close to zero = sideways market.
+    *   **Volatility Check**: Calculate price range over 30 days. Higher range = higher volatility.
+    *   **Trend Check**: Calculate price trend slope over 30 days. Slope close to zero = sideways market.
     *   **RSI Check**: Calculate RSI using the Wilder smoothing method over 14 days. Value oscillating between 30-70 is ideal.
     *   **Screening Criteria**: Volatility > 3%, |Trend Slope| < 2.0%, RSI between 25-75.
 
@@ -116,7 +117,11 @@ For each promising candidate, generate a dynamic grid range.
     *   **API**: `/api/v3/klines`
     *   **Parameters**: `symbol=<symbol>`, `interval=1h`, `limit=72`
 
-2.  **Calculate Bollinger Bands**: Compute 20-period Bollinger Bands to identify the current price range.
+2.  **Calculate Bollinger Bands**: Compute **standard 20-period Bollinger Bands** using only the most recent 20 closing prices from the 72-hour dataset.
+    *   **Middle Band**: SMA of the last 20 closing prices
+    *   **Upper Band**: Middle Band + (standard deviation of last 20 closes × 2)
+    *   **Lower Band**: Middle Band − (standard deviation of last 20 closes × 2)
+    *   **Why last 20?** Using all 72 candles would produce an overly wide band that reflects historical extremes rather than current price behavior. The 20-period window is the industry standard and captures the most relevant recent volatility.
 
 3.  **Identify Support/Resistance**: Use recent highs and lows from the 72-hour data.
 
@@ -167,6 +172,7 @@ If the `query-token-audit` skill is installed, perform a security audit on each 
             "requestId": "<uuid-v4>"
         }
         ```
+    *   **Note**: This audit applies to BSC (BEP-20) tokens. For major CEX spot pairs (BTC, ETH, etc.) that lack an on-chain contract address, this step is skipped and no security penalty is applied.
 
 2.  **Risk Assessment**: Evaluate the audit results:
     *   **Contract Risk**: Is the contract verified? Is it a proxy contract?
@@ -174,7 +180,7 @@ If the `query-token-audit` skill is installed, perform a security audit on each 
     *   **Scam Risk**: Is it flagged as a honeypot?
 
 3.  **Decision Logic**:
-    *   **SAFE**: Proceed with recommendation, display "Security: PASSED".
+    *   **SAFE**: Proceed with recommendation, display "Security: PASSED", add +5 bonus to score.
     *   **WARNING**: Proceed but add a prominent risk warning.
     *   **DANGEROUS**: **Auto-exclude** from recommendations.
 
@@ -209,8 +215,12 @@ Present the findings to the user in a structured format. The agent's response **
 
 After a grid recommendation is active, the agent should monitor for breakout conditions:
 
-1.  **Monitor Price**: Periodically check if the current price approaches the grid range boundaries.
+1.  **Monitor Price**: Periodically check if the current price approaches the grid range boundaries (within 10% of upper or lower bound).
 2.  **Volume Spike Detection**: If trading volume increases by more than 200% compared to the 24-hour average while price is near the range edge, trigger an alert.
+3.  **Alert Levels**:
+    *   **CRITICAL**: Price near boundary **AND** volume spike simultaneously.
+    *   **HIGH**: Either price near boundary **OR** volume spike alone.
+    *   **WARNING**: Price within 10% of boundary, no volume spike.
 
 ## Authentication
 
@@ -225,4 +235,4 @@ export BINANCE_API_SECRET="your_secret_key"
 
 ## User-Agent Header
 
-When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.2.0 (Skill)`.
+When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.3.0 (Skill)`.

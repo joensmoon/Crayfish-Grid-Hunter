@@ -1,5 +1,27 @@
 # Changelog
 
+## [4.3.0] - 2026-03-15
+
+### Fixed — Core Algorithm Correctness
+
+*   **RSI Calculation (Critical Fix)**: The Step 1 Kline fetch `limit` has been increased from `14` to `30`. The Wilder Smoothing RSI algorithm requires more data points than the period length (`n=14`) to produce a meaningful result. With only 14 candles, the calculation always fell back to the neutral value of 50.0, rendering RSI-based screening non-functional. With 30 daily candles (29 deltas), the algorithm now performs 14 warm-up iterations and 15 rolling updates, producing accurate RSI values that reflect real market momentum.
+
+*   **Bollinger Bands (Critical Fix)**: The Bollinger Band calculation has been corrected to use only the most recent **20 closing prices** (standard 20-period SMA), instead of all 72 hourly candles. The previous implementation averaged all available data, producing an artificially wide band that reflected historical extremes rather than current price behavior. This fix ensures the generated grid range is tightly aligned with recent market conditions.
+
+*   **Range Quality Score**: The composite scoring system now correctly implements the Range Quality factor (+10 points when grid range percentage ≥ 5%), which was described in `technical_indicators.md` but missing from the calculation logic.
+
+*   **Breakout Alert Logic**: The breakout alert test now validates real trigger logic with defined alert levels (`CRITICAL`, `HIGH`, `WARNING`) instead of relying on mock pass-through assertions.
+
+### Removed
+
+*   **`audit_notes.md`**: Removed internal development notes from the public repository.
+
+### Updated
+
+*   `SKILL.md`: Updated Step 1 to specify `limit=30` with a clear explanation of why 30 candles are required for RSI. Updated Step 2 to explicitly document the 20-period Bollinger Band window. Added alert level definitions to Step 7.
+*   `test_grid_hunter.py`: Added dedicated test cases for RSI data-guard validation (`[TEST 5b]`) and Bollinger Band 20-period correctness (`[TEST 5c]`). Removed all hard-coded score bonuses from the pipeline test.
+*   `TEST_RESULTS.md`: Regenerated with v4.3.0 results.
+
 ## [4.2.0] - 2026-03-15
 
 ### Improved — Feature Tiering & Accessibility
