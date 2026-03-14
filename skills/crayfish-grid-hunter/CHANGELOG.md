@@ -1,5 +1,26 @@
 # Changelog
 
+## [4.4.0] - 2026-03-15
+
+### Added — Performance Monitoring & Alerting
+
+*   **`monitor.py` — Performance Monitor & Alert Engine**: A new standalone module providing real-time, multi-dimensional health tracking for active grid positions. The monitor runs four independent check groups on every cycle:
+    *   **Grid Performance**: Tracks PnL (CRITICAL at −5%, HIGH at −3%) and fill rate (HIGH when ≤5%, MEDIUM when ≤20%). Fires an INFO milestone alert when PnL reaches +5%.
+    *   **Market Condition**: Detects price proximity to grid boundaries (CRITICAL within 3%, HIGH within 8%), price-out-of-range events, volume spikes (≥2.5× 24h average), and trend drift (>2% from entry price).
+    *   **Risk Management**: Enforces stop-loss discipline (CRITICAL within 2%, HIGH within 5%) and tracks drawdown from the price peak (CRITICAL at ≥8%, HIGH at ≥5%).
+    *   **API Health**: Monitors latency (HIGH ≥3000ms, MEDIUM ≥1000ms), error rates (HIGH ≥20%, MEDIUM ≥5%), and fallback endpoint activation across all Binance Skill API calls.
+
+*   **Alert Cooldown System**: Each unique alert condition has a configurable 15-minute cooldown window to prevent alert fatigue.
+
+*   **`create_monitor()` Factory**: A convenience factory function for creating pre-configured monitor instances with commonly adjusted thresholds.
+
+*   **`format_report()` Method**: Generates a human-readable, structured status report covering all active positions, API health metrics, and recent alert history.
+
+### Updated
+
+*   `SKILL.md`: Added Step 8 (Performance Monitoring & Alerting) with four detailed sub-sections (8.1–8.4) covering all alert conditions, thresholds, and an integration code example (8.5). Added alert cooldown documentation (8.6).
+*   `README.md`: Updated version to v4.4.0. Added Step 8 to the workflow diagram. Added `monitor.py` to the project structure tree. Updated the workflow step count from 7 to 8.
+
 ## [4.3.0] - 2026-03-15
 
 ### Fixed — Core Algorithm Correctness

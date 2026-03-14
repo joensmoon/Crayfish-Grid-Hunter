@@ -1,4 +1,4 @@
-# Crayfish Grid Hunter (小龙虾网格猎人) v4.3.0
+# Crayfish Grid Hunter (小龙虾网格猎人) v4.4.0
 
 Crayfish Grid Hunter 是一款专为币安 Agent 比赛设计的 **AI 网格交易智能助手**。它完全适配 **OpenClaw** AI Agent 框架，深度集成了 **5 个币安官方 Skill**，实现了从市场扫描、技术分析、聪明钱验证、安全审计到费用优化的**全链路网格交易决策流程**。
 
@@ -47,6 +47,9 @@ Step 6: 生成推荐 ──── 综合评分(0-115), 输出完整建议
     │
     ▼
 Step 7: 突破预警 ──── 持续监控, 量价异动时提醒用户
+    │
+    ▼
+Step 8: 性能监控 ──── 监控 PnL、成交率、回撤及 API 健康度，多级报警
 ```
 
 ---
@@ -57,7 +60,8 @@ Step 7: 突破预警 ──── 持续监控, 量价异动时提醒用户
 crayfish-grid-hunter/
 ├── skills/
 │   └── crayfish-grid-hunter/
-│       ├── SKILL.md                      # 核心 Skill 定义（7步工作流）
+│       ├── SKILL.md                      # 核心 Skill 定义（8步工作流）
+│       ├── monitor.py                    # 性能监控与多级报警引擎
 │       ├── CHANGELOG.md                  # 版本更新记录
 │       ├── LICENSE.md                    # MIT 许可证
 │       └── references/                   # 技术参考文档

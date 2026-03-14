@@ -1,7 +1,7 @@
 ---
 name: crayfish-grid-hunter
 description: "Crayfish Grid Hunter is an AI-powered grid trading assistant for Binance. It scans the market for optimal grid trading candidates, validates them with Smart Money signals and security audits, then generates dynamic grid ranges with risk management parameters. Use this skill when users ask about grid trading opportunities, coin screening, grid range analysis, or 'which coin is good for grid trading'."
-metadata: {"version":"4.3.0","author":"joensmoon","openclaw":{"requires":{"env":[]},"optionalEnv":["BINANCE_API_KEY"]}}
+metadata: {"version":"4.4.0","author":"joensmoon","openclaw":{"requires":{"env":[]},"optionalEnv":["BINANCE_API_KEY"]}}
 dependencies:
   skills:
     - name: spot
@@ -222,6 +222,95 @@ After a grid recommendation is active, the agent should monitor for breakout con
     *   **HIGH**: Either price near boundary **OR** volume spike alone.
     *   **WARNING**: Price within 10% of boundary, no volume spike.
 
+### Step 8: Performance Monitoring & Alerting
+
+Once a grid is running, activate the `GridPerformanceMonitor` (defined in `monitor.py`) to provide continuous, multi-dimensional health tracking. The monitor runs four independent check groups on every cycle:
+
+#### 8.1 Grid Performance
+
+Track PnL and fill rate to detect underperforming grids early.
+
+| Condition | Alert Level | Action |
+| :--- | :--- | :--- |
+| PnL ≤ −5% of invested capital | **CRITICAL** | Recommend stopping the grid immediately |
+| PnL ≤ −3% of invested capital | **HIGH** | Prompt user to review grid settings |
+| Fill rate ≤ 5% (grid stalled) | **HIGH** | Suggest range adjustment or market exit |
+| Fill rate ≤ 20% (low activity) | **MEDIUM** | Advisory: market may be trending |
+| PnL ≥ +5% milestone reached | **INFO** | Positive status update to user |
+
+#### 8.2 Market Condition
+
+Detect price boundary proximity, volume spikes, and trend drift in real time.
+
+| Condition | Alert Level | Action |
+| :--- | :--- | :--- |
+| Price within 3% of grid boundary | **CRITICAL** | Warn of imminent breakout |
+| Price within 8% of grid boundary | **HIGH** | Advisory: monitor closely |
+| Price exits grid range entirely | **CRITICAL** | Notify grid is now inactive |
+| Volume ≥ 2.5× 24h average | **CRITICAL** | Breakout signal — review position |
+| Price drifted >2% from entry | **MEDIUM** | Suggest re-centering the grid |
+
+#### 8.3 Risk Management
+
+Enforce stop-loss discipline and track drawdown from price peak.
+
+| Condition | Alert Level | Action |
+| :--- | :--- | :--- |
+| Price within 2% of stop-loss | **CRITICAL** | Immediate stop-loss warning |
+| Price within 5% of stop-loss | **HIGH** | Prepare for potential stop-loss execution |
+| Drawdown from peak ≥ 8% | **CRITICAL** | Recommend emergency exit |
+| Drawdown from peak ≥ 5% | **HIGH** | Review risk tolerance |
+
+#### 8.4 API Health
+
+Monitor the health of all Binance Skill API calls to ensure data reliability.
+
+| Condition | Alert Level | Action |
+| :--- | :--- | :--- |
+| Average latency ≥ 3000ms | **HIGH** | Warn of degraded data freshness |
+| Average latency ≥ 1000ms | **MEDIUM** | Advisory: API is slow |
+| Error rate ≥ 20% | **HIGH** | Warn of unreliable data |
+| Error rate ≥ 5% | **MEDIUM** | Advisory: intermittent errors |
+| Fallback endpoint active | **MEDIUM** | Notify primary API is unreachable |
+
+#### 8.5 Integration Example
+
+The monitor is imported and used within the agent loop as follows:
+
+```python
+from skills.crayfish_grid_hunter.monitor import create_monitor, GridPosition
+
+# Initialize monitor with custom thresholds
+monitor = create_monitor(
+    pnl_loss_critical_pct=-5.0,
+    boundary_proximity_critical_pct=3.0,
+    stop_loss_proximity_critical_pct=2.0,
+    volume_spike_multiplier=2.5,
+)
+
+# Register an active grid position
+monitor.register_position(GridPosition(
+    symbol="BTCUSDT",
+    grid_lower=68000.0, grid_upper=74000.0, grid_count=30,
+    entry_price=71000.0, current_price=71500.0,
+    stop_loss=66640.0, invested_usdt=1000.0,
+))
+
+# In the agent loop: update state and run checks
+monitor.update_position("BTCUSDT", current_price=73800.0,
+                        current_volume=28000.0, avg_volume_24h=10000.0)
+alerts = monitor.run_checks()
+for alert in alerts:
+    agent.notify(alert.level.value, alert.message)  # Surface to user
+
+# Generate a full status report
+print(monitor.format_report())
+```
+
+#### 8.6 Alert Cooldown
+
+To prevent alert fatigue, each unique alert condition has a **15-minute cooldown window**. The same condition will not re-trigger an alert until the cooldown expires, ensuring users receive actionable notifications rather than repeated noise.
+
 ## Authentication
 
 This skill **does not require** a Binance API key for its core market scanning and analysis functions. However, an API key is required for account-specific features like balance checks and fee optimization.
@@ -235,4 +324,4 @@ export BINANCE_API_SECRET="your_secret_key"
 
 ## User-Agent Header
 
-When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.3.0 (Skill)`.
+When making API calls, include the `User-Agent` header: `crayfish-grid-hunter/4.4.0 (Skill)`.
