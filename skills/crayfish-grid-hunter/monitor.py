@@ -199,6 +199,11 @@ class MonitorThresholds:
     api_error_rate_medium_pct: float = 5.0  # MEDIUM: Error rate > 5%
     api_error_rate_high_pct: float = 20.0   # HIGH: Error rate > 20%
 
+    # --- Futures-Specific (v5.0) ---
+    liquidation_proximity_pct: float = 10.0  # CRITICAL: Within 10% of liquidation price
+    funding_rate_high_pct: float = 0.003     # HIGH: Funding rate > 0.3% (long grid paying)
+    funding_rate_extreme_pct: float = 0.005  # CRITICAL: Funding rate > 0.5%
+
 
 # ============================================================
 # Core Monitor Engine
@@ -700,6 +705,137 @@ class GridPerformanceMonitor:
 # ============================================================
 # Convenience Factory
 # ============================================================
+
+# ============================================================
+# Futures-Specific Monitoring Helpers (v5.0)
+# ============================================================
+
+def check_funding_and_liquidation(
+    symbol: str,
+    current_price: float,
+    funding_rate: float,
+    liquidation_price: float,
+    stop_loss_price: float,
+    grid_direction: str = "neutral",
+    thresholds: Optional[MonitorThresholds] = None,
+) -> List[Alert]:
+    """
+    Futures-specific check for funding rate anomalies and liquidation proximity.
+
+    This function implements the monitoring logic described in SKILL.md Step 5.5:
+
+        if funding_rate < 0 and grid_direction == 'long':
+            alert_funding_profit(expected_yield)
+
+        if price < stop_loss_5pct or price < liquidation_price:
+            close_all_grids()
+
+    Parameters
+    ----------
+    symbol : str
+        Trading symbol (e.g. 'BTCUSDT')
+    current_price : float
+        Current mark price from /fapi/v1/premiumIndex
+    funding_rate : float
+        Latest funding rate from /fapi/v1/premiumIndex (e.g. -0.00012)
+    liquidation_price : float
+        Estimated liquidation price (from GridParameters.liquidation_price)
+    stop_loss_price : float
+        Hard stop-loss price (5% below lower bound)
+    grid_direction : str
+        'long', 'short', or 'neutral'
+    thresholds : MonitorThresholds, optional
+        Custom thresholds; uses defaults if None
+
+    Returns
+    -------
+    List[Alert]
+        List of triggered alerts (may be empty)
+    """
+    if thresholds is None:
+        thresholds = MonitorThresholds()
+
+    alerts: List[Alert] = []
+    now = datetime.now()
+
+    def _alert(level, category, message, value, threshold):
+        return Alert(
+            id=str(uuid.uuid4()),
+            level=level,
+            category=category,
+            symbol=symbol,
+            message=message,
+            value=value,
+            threshold=threshold,
+            timestamp=now,
+        )
+
+    # --- Emergency exit conditions ---
+    if current_price <= stop_loss_price:
+        alerts.append(_alert(
+            AlertLevel.CRITICAL, "futures_risk",
+            f"EMERGENCY: Price {current_price:.4f} has breached stop-loss {stop_loss_price:.4f} "
+            f"— CLOSE ALL GRID ORDERS IMMEDIATELY",
+            current_price, stop_loss_price,
+        ))
+
+    if liquidation_price > 0 and current_price <= liquidation_price * 1.05:
+        pct_from_liq = ((current_price - liquidation_price) / liquidation_price) * 100
+        alerts.append(_alert(
+            AlertLevel.CRITICAL, "futures_risk",
+            f"EMERGENCY: Price {current_price:.4f} is within {pct_from_liq:.1f}% of liquidation "
+            f"price {liquidation_price:.4f} — reduce leverage or add margin NOW",
+            pct_from_liq, 5.0,
+        ))
+    elif liquidation_price > 0:
+        pct_from_liq = ((current_price - liquidation_price) / liquidation_price) * 100
+        if pct_from_liq <= thresholds.liquidation_proximity_pct:
+            alerts.append(_alert(
+                AlertLevel.HIGH, "futures_risk",
+                f"Price {current_price:.4f} is {pct_from_liq:.1f}% above liquidation price "
+                f"{liquidation_price:.4f} — consider reducing position size",
+                pct_from_liq, thresholds.liquidation_proximity_pct,
+            ))
+
+    # --- Funding rate analysis ---
+    daily_yield_pct = abs(funding_rate) * 3 * 100  # 3 settlements per day
+
+    if funding_rate < 0 and grid_direction in ("long", "neutral"):
+        # Negative funding = long positions receive funding
+        alerts.append(_alert(
+            AlertLevel.INFO, "futures_funding",
+            f"Negative funding rate {funding_rate*100:.4f}% — long grid earns "
+            f"~{daily_yield_pct:.3f}%/day ({abs(funding_rate)*100:.4f}% per 8h × 3)",
+            abs(funding_rate), 0.0,
+        ))
+
+    elif funding_rate >= thresholds.funding_rate_extreme_pct and grid_direction in ("long", "neutral"):
+        alerts.append(_alert(
+            AlertLevel.CRITICAL, "futures_funding",
+            f"EXTREME funding rate {funding_rate*100:.4f}% — long grid paying "
+            f"{daily_yield_pct:.3f}%/day, severely impacting grid profitability",
+            funding_rate, thresholds.funding_rate_extreme_pct,
+        ))
+
+    elif funding_rate >= thresholds.funding_rate_high_pct and grid_direction in ("long", "neutral"):
+        alerts.append(_alert(
+            AlertLevel.HIGH, "futures_funding",
+            f"High funding rate {funding_rate*100:.4f}% — long grid paying "
+            f"{daily_yield_pct:.3f}%/day, consider switching to short-biased grid",
+            funding_rate, thresholds.funding_rate_high_pct,
+        ))
+
+    elif funding_rate > 0 and grid_direction == "short":
+        # Positive funding = short positions receive funding
+        alerts.append(_alert(
+            AlertLevel.INFO, "futures_funding",
+            f"Positive funding rate {funding_rate*100:.4f}% — short grid earns "
+            f"~{daily_yield_pct:.3f}%/day",
+            funding_rate, 0.0,
+        ))
+
+    return alerts
+
 
 def create_monitor(
     pnl_loss_critical_pct: float = -5.0,

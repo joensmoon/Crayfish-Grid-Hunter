@@ -1,5 +1,73 @@
 # Changelog
 
+## [5.0.0] - 2026-03-15
+
+### Breaking Changes
+
+*   **Futures Market Focus**: The skill now targets USDS-M Perpetual Futures exclusively.
+    The previous Spot market workflow (Steps 1–7 using `crypto-market-rank` and `spot` skills)
+    has been replaced by the new Futures dual-category workflow using `derivatives-trading-usds-futures`.
+*   **New Core Engine**: `grid_hunter_v5.py` replaces the inline code in the old test script.
+    It provides `FuturesSymbol`, `MarketSnapshot`, `TechnicalAnalysis`, `GridParameters`,
+    `calculate_geometric_grid`, `screen_recent_listings`, and `screen_high_volatility`.
+
+### Added — Dual-Category Screening (双分类筛选)
+
+*   **Category A (次新币横盘类)**: Screens for symbols listed within 60 days that have entered
+    sideways consolidation. Filters: `ATR(14) < 2%`, `BB-width < 5%`, `ADX(14) < 20`.
+    Scored by recency, ATR tightness, and BB narrowness.
+*   **Category B (高波动套利类)**: Screens for high-volatility arbitrage candidates.
+    Filters: annualized `RV > 15%`, `quoteVolume/openInterest > 0.30`, 24h intraday range 5%–40%.
+    Scored by RV, turnover ratio, and optimal 24h volatility proximity.
+*   Both categories output exactly 3 ranked candidates with current price, 24h volatility,
+    support, and resistance levels.
+
+### Added — Geometric Neutral Grid (等比中性网格)
+
+*   **Geometric Grid Algorithm**: Implements `r = (upper/lower)^(1/n)` to ensure equal
+    percentage profit at every price level. This is the industry standard for volatile assets.
+*   **Minimum Profit Enforcement**: If `profit_per_grid < 0.8%`, the grid count is automatically
+    reduced until the minimum is satisfied. Target range: 0.8%–1.2% per grid after fees.
+*   **Grid Range Calculation**: Anchored to the tightest of: 20-period Bollinger Bands,
+    20-day swing support/resistance, and `current_price ± 3×ATR(14)`.
+*   **Grid Count by Volatility**: 20 grids (<8% vol), 30 grids (8–15%), 40 grids (15–25%),
+    50 grids (≥25%).
+
+### Added — Futures Risk Management
+
+*   **5% Hard Stop-Loss**: `stop_loss = lower × 0.95`. Enforced as a hard rule for all grids.
+*   **Liquidation Price Estimate**: `liq = lower × (1 - 1/leverage + maintenance_margin_rate)`.
+    Uses `maintenance_margin_rate = 0.4%` (standard for most symbols).
+*   **Funding Rate Analysis**: Queries `/fapi/v1/premiumIndex` for the latest funding rate.
+    Calculates daily yield (`abs(rate) × 3 × 100`%) and generates alerts for extreme rates.
+
+### Added — Futures Monitor Enhancements (v5.0)
+
+*   **`check_funding_and_liquidation()` function**: A new standalone helper in `monitor.py`
+    that implements the Step 5.5 monitoring logic from SKILL.md:
+    *   Negative funding → INFO alert (long grid earns funding)
+    *   Price ≤ stop-loss → CRITICAL (close all grids)
+    *   Price within 5% of liquidation → CRITICAL (reduce leverage)
+    *   Funding rate > 0.5% → CRITICAL (extreme cost for long grid)
+    *   Funding rate > 0.3% → HIGH (high cost for long grid)
+    *   Positive funding for short grid → INFO (short grid earns funding)
+*   **New `MonitorThresholds` fields**: `liquidation_proximity_pct` (10%),
+    `funding_rate_high_pct` (0.003), `funding_rate_extreme_pct` (0.005).
+
+### Updated
+
+*   `SKILL.md`: Completely rewritten for v5.0. New 5-step workflow (Step 0–5) covering
+    dual-category screening, Geometric grid generation, Smart Money validation, security audit,
+    fee optimization, and performance monitoring. Added Grid Score reference table.
+*   `monitor.py`: Added `check_funding_and_liquidation()` function and three new
+    futures-specific threshold fields to `MonitorThresholds`.
+*   `test_grid_hunter.py`: Completely rewritten. 43 tests across 10 test groups covering
+    all v5.0 algorithms. All tests use synthetic data for offline execution.
+*   `TEST_RESULTS.md`: Updated to v5.0 with full test execution report.
+*   `README.md`: Updated to v5.0 with new workflow diagram, project structure, and
+    install instructions.
+
+
 ## [4.4.0] - 2026-03-15
 
 ### Added — Performance Monitoring & Alerting
