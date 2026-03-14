@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0] - 2026-03-15
+
+### Added — Official Release (v1.0.0)
+
+*   **Stable Release**: The project has reached its first stable milestone, transitioning from v5.x development to v1.0.0.
+*   **Historical Backtester**: Added `backtester.py` for 30-day 1h kline simulations, providing ROI, Sharpe ratio, and Max Drawdown.
+*   **User Customization**: Implemented `UserConfig` allowing natural language overrides for 15+ parameters (leverage, stop-loss, mcap, etc.).
+*   **Enhanced Monitoring**: `monitor.py` now includes a real-time console dashboard, volatility regime detection, and auto-tuning suggestions.
+*   **Troubleshooting Guide**: Added `TROUBLESHOOTING.md` for common installation, API, and strategy issues.
+*   **Refined Screening**: Standardized Category A (Recent Contracts ≤90 days) and Category B (High Volatility $200M-$1B Mcap) logic.
+
 ## [5.2.0] - 2026-03-15
 
 ### Changed — Dual-Category Logic & Pure Official Skills

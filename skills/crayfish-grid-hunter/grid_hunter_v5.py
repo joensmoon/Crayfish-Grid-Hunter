@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "5.3.0"
+VERSION = "1.0.0"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"

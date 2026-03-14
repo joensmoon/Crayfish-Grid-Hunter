@@ -1,10 +1,10 @@
 ---
 name: crayfish-grid-hunter
 description: |
-  v5.3 USDS-M 永续合约网格猎手。双分类筛选（次新币横盘 + 高波动套利）→ 历史回测 → Geometric 等比中性网格 → 实时监控。
+  v1.0 USDS-M 永续合约网格猎手。双分类筛选（次新币横盘 + 高波动套利）→ 历史回测 → Geometric 等比中性网格 → 实时监控。
   支持自然语言参数自定义，纯币安官方 Skill 组合，下载即用。
 metadata:
-  version: 5.3.0
+  version: 1.0.0
   author: joensmoon
   openclaw:
     requires:
@@ -19,7 +19,7 @@ metadata:
 license: MIT
 ---
 
-# Crayfish Grid Hunter v5.3
+# Crayfish Grid Hunter v1.0
 
 Crayfish Grid Hunter 是一款专为币安合约市场设计的智能网格交易工具。它集成了双分类筛选引擎、历史回测系统、等比中性网格算法以及实时性能监控。
 

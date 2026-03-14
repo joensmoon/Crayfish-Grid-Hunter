@@ -43,7 +43,7 @@ import requests
 # Configuration
 # ============================================================
 
-VERSION = "5.3.0"
+VERSION = "1.0.0"
 FAPI_BASE = "https://fapi.binance.com"
 MAKER_FEE = 0.0004
 TAKER_FEE = 0.0005
