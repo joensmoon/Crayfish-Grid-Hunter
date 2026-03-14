@@ -1,106 +1,75 @@
-# Crayfish Grid Hunter (小龙虾网格猎人) v5.0
+# Crayfish Grid Hunter (小龙虾网格猎人) v5.2
 
 **Author**: joensmoon  
-**Version**: 5.0.0  
+**Version**: 5.2.0  
 **License**: MIT  
 **Platform**: OpenClaw (Binance Agent Competition)
 
 Crayfish Grid Hunter 是一款专为币安 Agent 比赛设计的 **AI 合约网格交易智能助手**。它完全适配 **OpenClaw** AI Agent 框架，实现了从市场双分类扫描、技术分析、等比网格参数生成到风险监控的全链路交易决策流程。
 
----
-
-## 🌟 What's New in v5.0 (The Futures Update)
-
-Version 5.0 是一次重大架构升级，全面转向 **币安 USDS-M 永续合约市场**，引入了双分类筛选模型和 Geometric 等比中性网格策略：
-
-1. **双分类市场筛选 (Dual-Category Screening)**
-   - **次新币横盘类 (Category A)**：筛选上市 60 天内、经历回调后进入横盘整理期的代币（ATR < 2%, BB-width < 5%, ADX < 20）。
-   - **高波动套利类 (Category B)**：筛选高换手率、高真实波动率（RV > 15%/yr）且日内波幅在 5%-40% 的最佳套利标的。
-2. **等比中性网格 (Geometric Neutral Grid)**
-   - 采用等比数列 (`r^n = upper/lower`) 计算网格间距，确保每个价位的利润率完全一致，最适合高波动资产。
-   - 严格控制单格净利润在 0.8%–1.2%（扣除手续费后），防止无效的高频交易。
-3. **合约专属风险管理 (Futures Risk Management)**
-   - **强平估算**：自动计算交叉保证金下的预估强平价格。
-   - **5% 硬止损**：强制在网格下轨下方 5% 设置硬止损位。
-   - **资金费率分析**：分析当前 Funding Rate，预估多头/空头网格的每日资金费率收益，并在极值时发出警告。
-4. **增强版实时监控 (Enhanced Monitor)**
-   - 新增了资金费率突变、价格逼近强平线等合约专属的 CRITICAL/HIGH 级监控报警。
+**核心亮点**：纯币安官方 Skill 组合，无需任何第三方 API Key，下载安装后即可在 OpenClaw 中立刻使用。
 
 ---
 
-## 工作流程
+## 🌟 What's New in v5.2 (完美适配比赛 Prompt)
 
-```text
-用户: "帮我筛选一下合约市场的次新币和高波动币，做个等比网格"
-    │
-    ▼
-Step 0: 双分类筛选 ── derivatives-trading-usds-futures (合约列表 + K线 + 资金费率)
-    │                  Category A: 次新币横盘 | Category B: 高波动套利
-    ▼
-Step 1: 等比网格 ──── 20期布林带 + 3xATR 确定区间，计算等比比率 r 和单格利润
-    │                  计算 5% 硬止损位、预估强平价、资金费率收益
-    ▼
-Step 2: 聪明钱验证 ── trading-signal (Smart Money 买入信号)
-    │                  有BUY信号 → 评分+15
-    ▼
-Step 3: 安全审计 ──── query-token-audit (针对 BSC 链上代币)
-    │                  DANGEROUS → 自动排除; SAFE → 评分+5
-    ▼
-Step 4: 费用优化 ──── assets (余额检查 + BNB燃烧抵扣) [可选，需API Key]
-    │
-    ▼
-Step 5: 性能监控 ──── monitor.py (后台持续监控 PnL、资金费率、强平距离、API健康度)
-```
+1. **纯官方数据源**：严格遵守合规要求，**仅使用币安官方 Skills**，利用 `query-token-info` 获取市值（Market Cap）计算真实换手率，**不依赖 CoinAnk 等第三方插件**。
+2. **双分类全量筛选**：
+   - **次新币横盘类 (Category A)**：自动寻找近 90 天内新上线合约、成交量萎缩至均量 50% 以下、且处于窄幅箱体横盘（ATR < 2% / BB宽 < 5%）的标的。
+   - **高波动套利类 (Category B)**：自动寻找市值在 $2亿-$10亿之间、24h 换手率 > 50%、且实现波动率（RV）极高的“妖币”。
+3. **Geometric 等比中性网格**：
+   - 强制使用等比网格（Geometric），以应对高波动率资产。
+   - 动态调整网格密度，精确控制单格利润率在 **0.8% - 1.2%** 之间（扣除 0.04% 手续费后）。
+   - 自动计算 5% 硬止损位与强平价格。
+4. **Funding 阿尔法提醒**：实时监控资金费率，当费率为负且开多头网格时，自动计算并提醒预期的费率收益。
 
 ---
 
-## 项目结构
+## 🚀 触发指令示例
 
-```text
-crayfish-grid-hunter/
-├── skills/
-│   └── crayfish-grid-hunter/
-│       ├── SKILL.md                      # 核心 Skill 定义（工作流与Prompt）
-│       ├── grid_hunter_v5.py             # v5.0 核心算法引擎（双分类 + 等比网格）
-│       ├── monitor.py                    # 性能监控与多级报警引擎（含合约专属监控）
-│       ├── CHANGELOG.md                  # 版本更新记录
-│       ├── LICENSE.md                    # MIT 许可证
-│       └── references/                   # 技术参考文档
-├── test_grid_hunter.py                   # 完整离线测试脚本（43项算法验证）
-├── TEST_RESULTS.md                       # 测试报告
-└── README.md                             # 本文档
-```
+直接在 OpenClaw 对话框中输入以下极简指令即可触发：
+
+- **“次新币网格”** → 自动筛选次新币横盘标的，并生成网格策略。
+- **“高波动套利”** → 自动筛选市值2亿-10亿的高换手妖币，并生成网格策略。
+- **“网格猎手”** → 执行完整的双分类筛选，并输出每个分类的 Top 3 推荐及策略参数。
 
 ---
 
-## 快速开始 (OpenClaw)
+## 📦 极速安装 (10秒搞定)
 
-此 Skill 完全符合 OpenClaw 规范，用户下载安装后即可**立刻使用**。
-
-### 第一步：安装官方依赖 Skills
-
-Crayfish Grid Hunter v5.0 依赖于币安官方的合约与 Web3 Skills：
+在 OpenClaw 环境中运行以下命令，一键安装本项目及所有依赖的官方 Skills：
 
 ```bash
-# 请确保已安装 OpenClaw skills CLI
-npm install -g skills
+npx skills add https://github.com/binance/binance-skills-hub \
+  --skill derivatives-trading-usds-futures \
+  --skill query-token-info \
+  --skill trading-signal \
+  --skill query-token-audit \
+  --skill assets \
+  -a openclaw -y
 
-# 安装币安官方 Skills
-skills add https://github.com/binance/binance-skills-hub -s derivatives-trading-usds-futures
-skills add https://github.com/binance/binance-skills-hub -s trading-signal
+npx skills add https://github.com/joensmoon/Crayfish-Grid-Hunter \
+  --skill crayfish-grid-hunter \
+  -a openclaw -y
 ```
 
-### 第二步：安装 Crayfish Grid Hunter
+---
 
-```bash
-skills add https://github.com/joensmoon/Crayfish-Grid-Hunter -s crayfish-grid-hunter
-```
+## 🛠 依赖的官方 Skills (无第三方)
+
+| Skill | 来源 | 用途 |
+| :--- | :--- | :--- |
+| `derivatives-trading-usds-futures` | `binance/` | 获取永续合约列表、K线数据、资金费率 |
+| `query-token-info` | `binance-web3/` | **获取市值 (Market Cap) 计算真实换手率** |
+| `trading-signal` | `binance-web3/` | 获取 Smart Money 信号加分 |
+| `query-token-audit` | `binance-web3/` | 获取安全审计结果加分 |
+| `assets` | `binance/` | 账户余额与手续费优化（仅下单时需要 API Key） |
 
 ---
 
 ## 权限与认证
 
-**无需 API 密钥**即可运行核心的市场筛选和网格参数计算功能。所有行情数据（K线、资金费率、24h Ticker）均通过币安公共端点获取。
+**无需 API 密钥**即可运行核心的市场筛选和网格参数计算功能。所有行情数据均通过币安公共端点获取。
 
 只有当您需要让 Agent 自动检查账户余额或开启 BNB 抵扣时，才需要配置环境变量：
 ```bash
@@ -110,12 +79,12 @@ export BINANCE_API_SECRET="your_secret_key"
 
 ---
 
-## 作者与贡献
+## 测试覆盖率
 
-本项目由 **joensmoon** 独立开发，致力于为币安 Agent 比赛提供最专业的合约网格交易辅助工具。
+核心算法引擎经过 72 项严格的本地单元测试（包含 90 天次新边界、等比比率精度、最低利润强制执行等），测试结果 100% 通过。详见 [TEST_RESULTS.md](TEST_RESULTS.md)。
 
 ---
 
-## 许可证
+## 作者与贡献
 
-本项目采用 **MIT** 许可证。
+本项目由 **joensmoon** 独立开发，致力于为币安 Agent 比赛提供最专业的合约网格交易辅助工具。仅有一个贡献者。

@@ -1,363 +1,322 @@
 ---
 name: crayfish-grid-hunter
-description: "Crayfish Grid Hunter is an AI-powered grid trading assistant for Binance USDS-M Perpetual Futures. It performs dual-category screening — Category A: Recent Listings in sideways consolidation (次新币横盘类), Category B: High-Volatility Arbitrage candidates (高波动套利类) — then generates Geometric Neutral Grid strategies with precise per-grid profit control (0.8%–1.2% after fees), liquidation price calculation, 5% hard stop-loss, and funding rate yield alerts. Use this skill when users ask about futures grid trading, coin screening for grid strategies, Geometric grid parameters, or 'which futures coin is good for grid trading'."
-metadata: {"version":"5.0.0","author":"joensmoon","openclaw":{"requires":{"env":[]},"optionalEnv":["BINANCE_API_KEY"]}}
-dependencies:
-  skills:
-    - name: derivatives-trading-usds-futures
-      source: binance/derivatives-trading-usds-futures
-    - name: spot
-      source: binance/spot
-    - name: trading-signal
-      source: binance-web3/trading-signal
-    - name: query-token-audit
-      source: binance-web3/query-token-audit
-    - name: assets
-      source: binance/assets
+description: |
+  v5.2 USDS-M 永续合约网格猎手。双分类筛选（次新币横盘 + 高波动套利）→ Geometric 等比中性网格 → 实时监控。
+  纯币安官方 Skill 组合，无需第三方 API Key，下载即用。
+metadata:
+  version: 5.2.0
+  author: joensmoon
+  openclaw:
+    requires:
+      - derivatives-trading-usds-futures
+      - query-token-info
+      - trading-signal
+      - query-token-audit
+      - assets
+    optionalEnv:
+      - BINANCE_API_KEY
+      - BINANCE_API_SECRET
 license: MIT
 ---
 
-# Crayfish Grid Hunter v5.0
+# Crayfish Grid Hunter v5.2
 
-## Overview
-
-Crayfish Grid Hunter v5.0 is a **USDS-M Perpetual Futures grid trading assistant** built for the Binance Agent competition. It performs **dual-category market screening** and generates **Geometric Neutral Grid** strategies that comply with the Binance Futures Grid 2026 specification.
-
-**Two screening categories:**
-
-| Category | Chinese Name | Target | Grid Strategy |
-| :--- | :--- | :--- | :--- |
-| **Category A** | 次新币横盘类 | Listed < 60 days, post-pullback sideways consolidation | Geometric Neutral, 20–30 grids |
-| **Category B** | 高波动套利类 | RV > 15%/yr, Volume/OI > 30%, 24h vol 5%–40% | Geometric Neutral, 30–60 grids |
-
----
+USDS-M 永续合约专用网格猎手。从全市场合约中自动筛选标的，生成 Geometric 等比中性网格策略，并持续监控风险。
 
 ## Trigger Conditions
 
-Activate this skill when the user mentions any of the following:
-- "次新币横盘" / "高波动套利" / "两个分类" / "双分类筛选"
-- "网格交易" / "合约网格" / "期货网格" / "grid trading"
-- "Geometric网格" / "等比网格" / "中性网格" / "Neutral Grid"
-- "哪个币适合做网格" / "which coin is good for grid trading"
-- "网格参数" / "强平价格" / "funding收益"
+当用户消息包含以下任一关键词时，激活此 Skill：
+
+| 触发词 | 对应动作 |
+| :--- | :--- |
+| 次新币网格 | 执行 Category A 筛选 → 生成网格策略 |
+| 高波动套利 | 执行 Category B 筛选 → 生成网格策略 |
+| 网格猎手 | 执行双分类全量筛选 → 生成网格策略 |
+| 合约网格 | 执行双分类全量筛选 → 生成网格策略 |
+| 网格交易策略 | 针对指定币种生成 Geometric 中性网格 |
+| Geometric 网格 | 针对指定币种生成 Geometric 中性网格 |
+| 筛选合约标的 | 执行双分类全量筛选 |
+
+---
+
+## Dependencies (Official Skills Only)
+
+```bash
+npx skills add https://github.com/binance/binance-skills-hub \
+  --skill derivatives-trading-usds-futures \
+  --skill query-token-info \
+  --skill trading-signal \
+  --skill query-token-audit \
+  --skill assets \
+  -a openclaw -y
+```
+
+| Skill | Source | Purpose |
+| :--- | :--- | :--- |
+| `derivatives-trading-usds-futures` | `binance/` | 合约列表、K线、资金费率、未平仓量 |
+| `query-token-info` | `binance-web3/` | **市值（Market Cap）、换手率、代币信息** |
+| `trading-signal` | `binance-web3/` | Smart Money 信号加分 |
+| `query-token-audit` | `binance-web3/` | 安全审计加分 |
+| `assets` | `binance/` | 账户余额、手续费优化 |
 
 ---
 
 ## Workflow
 
-### Step 0: Dual-Category Screening (双分类筛选)
-
-**Goal**: Output exactly 3 candidates per category, each with current price, 24h volatility, support, and resistance.
-
-#### 0.1 Fetch Universe
-
-Call the `derivatives-trading-usds-futures` skill to get all active USDS-M perpetual symbols:
-
-*   **Skill**: `derivatives-trading-usds-futures`
-*   **API**: `GET /fapi/v1/exchangeInfo`
-*   **Authentication**: Not required
-*   **Filter**: `contractType = PERPETUAL`, `quoteAsset = USDT`, `status = TRADING`
-
-#### 0.2 Fetch Market Data
-
-For each candidate symbol, call:
-
-1.  **24hr Ticker** — price, volume, high/low:
-    *   **API**: `GET /fapi/v1/ticker/24hr`
-    *   **Params**: `symbol=<SYMBOL>`
-    *   **Authentication**: Not required
-
-2.  **Mark Price & Funding Rate**:
-    *   **API**: `GET /fapi/v1/premiumIndex`
-    *   **Params**: `symbol=<SYMBOL>`
-    *   **Authentication**: Not required
-    *   **Returns**: `markPrice`, `indexPrice`, `lastFundingRate`, `nextFundingTime`
-
-3.  **Open Interest**:
-    *   **API**: `GET /fapi/v1/openInterest`
-    *   **Params**: `symbol=<SYMBOL>`
-    *   **Authentication**: Not required
-
-4.  **Daily Klines** (30 candles for technical analysis):
-    *   **API**: `GET /fapi/v1/klines`
-    *   **Params**: `symbol=<SYMBOL>&interval=1d&limit=30`
-    *   **Authentication**: Not required
-
-#### 0.3 Category A Screening — Recent Listings (次新币横盘类)
-
-Apply all three filters. A symbol qualifies if **at least one** sideways indicator is met:
-
-| Filter | Condition | Data Source |
-| :--- | :--- | :--- |
-| Listing age | `onboardDate` within 60 days | `exchangeInfo` |
-| ATR(14) | `ATR(14) < 2%` of last price | Daily klines |
-| Bollinger Band width | `BB_width < 5%` (standard 20-period) | Daily klines |
-| ADX(14) | `ADX(14) < 20` (sideways market) | Daily klines |
-
-**Scoring**: Lower ATR + narrower BB + lower ADX + more recent listing = higher score.
-
-#### 0.4 Category B Screening — High Volatility Arbitrage (高波动套利类)
-
-All three conditions must be met:
-
-| Filter | Condition | Data Source |
-| :--- | :--- | :--- |
-| Realized Volatility | Annualized RV > 15% (from daily log returns) | Daily klines |
-| Volume/OI Ratio | `quoteVolume / openInterest > 0.30` | Ticker + OI |
-| 24h Intraday Range | `(high - low) / lastPrice` between 5% and 40% | Ticker |
-
-**Scoring**: Higher RV + higher turnover + 24h vol closest to 15%–25% = higher score.
-
-#### 0.5 Output Format (Step 0)
-
-Present results in this exact format:
+### Step 0: Load All USDS-M Perpetual Contracts
 
 ```
-【次新币横盘类 — Recent Listings (Category A)】
-  1. XXXUSDT  Current: $xx.xxxx  24h-Vol: xx.xx%  Support: $xx.xxxx  Resistance: $xx.xxxx
-     → Listed Xd ago; ATR=X.XX%, BB-width=X.XX%, ADX=X.X
-  2. ...
-  3. ...
-
-【高波动套利类 — High Volatility Arbitrage (Category B)】
-  1. XXXUSDT  Current: $xx.xxxx  24h-Vol: xx.xx%  Support: $xx.xxxx  Resistance: $xx.xxxx
-     → RV=XX.X%/yr, Vol/OI=X.XXx, 24h-vol=XX.XX%
-  2. ...
-  3. ...
+GET /fapi/v1/exchangeInfo
+Skill: derivatives-trading-usds-futures
 ```
+
+Filter: `contractType == "PERPETUAL"` AND `quoteAsset == "USDT"` AND `status == "TRADING"`.
+
+Extract for each symbol:
+- `symbol`, `baseAsset`, `onboardDate` (contract listing timestamp)
+- `pricePrecision`, `quantityPrecision`, `tickSize`, `stepSize`
+
+Then fetch all 24hr tickers in one call:
+
+```
+GET /fapi/v1/ticker/24hr
+```
+
+Sort by `quoteVolume` descending, take top 200 for analysis.
 
 ---
 
-### Step 1: Geometric Neutral Grid Strategy (合约中性网格)
+### Step 1: Fetch Technical Data
 
-For each screened symbol, generate a complete Geometric Neutral Grid strategy.
-
-#### 1.1 Grid Type and Direction
-
-*   **Grid Type**: **Geometric (等比网格)** — each price level is separated by a constant ratio `r`, not a fixed dollar amount. This is the industry standard for volatile assets as it provides equal percentage profit at every level.
-*   **Direction**: **Neutral (中性)** — no initial position bias. The grid places buy orders below current price and sell orders above, profiting from oscillation in both directions.
-
-#### 1.2 Grid Range Calculation
-
-The grid range is anchored to three technical levels, taking the **tightest valid range**:
+For each of the top 200 symbols:
 
 ```
-lower = max(BB_lower_20, swing_support_20, current_price - 3×ATR)
-upper = min(BB_upper_20, swing_resistance_20, current_price + 3×ATR)
+GET /fapi/v1/klines?symbol={symbol}&interval=1d&limit=30
+GET /fapi/v1/premiumIndex?symbol={symbol}
+GET /fapi/v1/openInterest?symbol={symbol}
 ```
 
-*   **BB lower/upper**: Standard 20-period Bollinger Bands (2σ) from daily klines
-*   **Swing support/resistance**: Lowest low / highest high of the last 20 daily candles
-*   **ATR buffer**: `3 × ATR(14)` from daily klines
-*   **Minimum range**: If `(upper - lower) / price < 5%`, expand to `price ± 2.5%`
+Compute from 30 daily klines:
 
-#### 1.3 Grid Count Selection
+| Indicator | Formula | Purpose |
+| :--- | :--- | :--- |
+| ATR(14) % | `mean(TR[-14:]) / close * 100` | Volatility measurement |
+| BB Width % | `4 * std(close[-20:]) / sma(close[-20:]) * 100` | Range width (standard 20-period) |
+| ADX(14) | Wilder's DI+/DI-/DX smoothing | Trend strength |
+| RV % | `std(log_returns) * sqrt(365) * 100` | Annualized realized volatility |
+| Volume Shrinkage | `volume[-1] / mean(volume[-8:-1])` | Current vs 7-day average |
+| Support | `min(lows[-20:])` | 20-period swing low |
+| Resistance | `max(highs[-20:])` | 20-period swing high |
+
+---
+
+### Step 2: Fetch Market Cap Data
+
+For **Category B** screening, call the official `query-token-info` skill:
+
+```
+GET https://web3.binance.com/bapi/defi/v5/public/wallet-direct/buw/wallet/market/token/search
+    ?keyword={baseAsset}&orderBy=volume24h
+Skill: query-token-info
+Headers: User-Agent: binance-web3/1.0 (Skill)
+```
+
+Extract: `marketCap` (USD), `volume24h` (USD).
+
+Compute **real turnover rate**: `turnover = futures_quoteVolume_24h / marketCap`.
+
+---
+
+### Step 3: Category A — 次新币横盘类
+
+**Definition**: 近 90 天内新上线合约的币种，已经历首波回调，目前成交量萎缩并在窄幅箱体横盘。
+
+| 筛选条件 | 阈值 | 数据来源 |
+| :--- | :--- | :--- |
+| 合约上线时间 | `onboardDate` 距今 ≤ 90 天 | `exchangeInfo` |
+| 成交量萎缩 | 24h Volume < 7日均量的 50% | `klines` (volume) |
+| 横盘确认（满足任一） | ATR(14) < 2% 或 BB宽 < 5% 或 ADX < 20 | `klines` 计算 |
+
+**Scoring (0–100)**:
+
+| Component | Max Points | Formula |
+| :--- | :--- | :--- |
+| ATR 横盘强度 | 25 | `(2.0 - ATR) / 2.0 * 25` |
+| BB 窄幅强度 | 25 | `(5.0 - BB_width) / 5.0 * 25` |
+| ADX 无趋势 | 20 | `(20 - ADX) / 20 * 20` |
+| 成交量萎缩 | 15 | `(0.5 - vol_ratio) / 0.5 * 15` |
+| 上线时间新 | 15 | `(90 - age_days) / 90 * 15` |
+
+Output top 3 by score.
+
+---
+
+### Step 4: Category B — 高波动套利类
+
+**Definition**: 市值 $2亿–$10亿、24h 换手率 > 50%、实现波动率处于高位的"妖币"。
+
+| 筛选条件 | 阈值 | 数据来源 |
+| :--- | :--- | :--- |
+| 市值 | $200M – $1,000M | `query-token-info` |
+| 24h 换手率 | > 50% (`quoteVolume / marketCap`) | `ticker` + `query-token-info` |
+| 实现波动率 | RV > 15% annualized | `klines` log returns |
+| 量能确认 | 24h quoteVolume > $10M | `ticker` |
+
+**Scoring (0–100)**:
+
+| Component | Max Points | Formula |
+| :--- | :--- | :--- |
+| 实现波动率 | 30 | `min(RV / 50 * 30, 30)` |
+| 换手率 | 25 | `min(turnover / 2.0 * 25, 25)` |
+| 最优24h波动 | 25 | 15%–25% range = max, penalty outside |
+| 量能强度 | 20 | `min(quoteVol / $100M * 20, 20)` |
+
+Output top 3 by score.
+
+---
+
+### Step 5: Generate Geometric Neutral Grid
+
+For each screened symbol (volatility 15%–25% preferred):
+
+**Grid Type**: Geometric (equal-ratio) — each grid level is a fixed ratio `r` apart.
+
+**Direction**: Neutral — no initial position, buy below current price, sell above.
+
+**Grid Range**:
+```
+lower = max(BB_lower, support, price - 3×ATR)
+upper = min(BB_upper, resistance, price + 3×ATR)
+Minimum range: ±5% from current price
+```
+
+**Grid Count** (based on 24h volatility):
 
 | 24h Volatility | Grid Count |
 | :--- | :--- |
-| ≥ 25% | 50 grids |
-| 15% – 25% | 40 grids |
-| 8% – 15% | 30 grids |
-| < 8% | 20 grids |
+| ≥ 25% | 50 |
+| 15%–25% | 40 |
+| 8%–15% | 30 |
+| < 8% | 20 |
 
-#### 1.4 Geometric Ratio and Per-Grid Profit
-
-The geometric ratio `r` is derived from the price range and grid count:
-
-```
-r = (upper / lower) ^ (1 / n)
+**Geometric Ratio**:
+```python
+r = (upper / lower) ** (1 / grid_count)
+profit_per_grid = r - 1 - 2 * 0.0004   # Deduct 0.04% maker fee per side
 ```
 
-Per-grid net profit after fees:
+**Minimum Profit Enforcement**: If `profit_per_grid < 0.8%`, reduce `grid_count` until `profit ≥ 0.8%`.
 
-```
-profit_per_grid = (r - 1) - 2 × maker_fee
-```
-
-Where `maker_fee = 0.04%` (standard rate; 0.02% with BNB burn enabled).
-
-**Minimum profit enforcement**: If `profit_per_grid < 0.8%`, reduce grid count until the minimum is satisfied:
-
-```
-min_r = 1 + 0.008 + 2 × 0.0004 = 1.0088
-n_adjusted = floor(log(upper/lower) / log(min_r))
+**Risk Control**:
+```python
+stop_loss = lower * 0.95                # 5% hard stop below lower bound
+liquidation_price = lower * (1 - 1/leverage + 0.004)  # Estimated liquidation
+max_position = account_balance * 0.08   # Max 8% account exposure
 ```
 
-**Target profit range**: 0.8% – 1.2% per grid after fees.
-
-#### 1.5 Risk Parameters
-
-**5% Hard Stop-Loss**:
-```
-stop_loss = lower × 0.95
-```
-If price falls below `stop_loss`, close all grid orders immediately.
-
-**Liquidation Price Estimate** (cross margin, simplified):
-```
-liquidation_price ≈ lower × (1 - 1/leverage + maintenance_margin_rate)
-```
-Where `maintenance_margin_rate = 0.4%` (standard for most symbols).
-
-**Maximum account exposure**: Single grid position ≤ 8% of total account balance.
-
-#### 1.6 Funding Rate Analysis
-
-Funding is settled every 8 hours (3× per day). Query the latest rate:
-
-*   **API**: `GET /fapi/v1/premiumIndex` → field `lastFundingRate`
-*   **Authentication**: Not required
-
-**Decision logic**:
-
-| Condition | Action |
-| :--- | :--- |
-| `funding_rate < 0` AND grid is long-biased | Alert: "Long grid earns ~`abs(rate) × 3 × 100`%/day from funding" |
-| `funding_rate > 0.001` AND grid is short-biased | Alert: "Short grid earns ~`rate × 3 × 100`%/day from funding" |
-| `funding_rate > 0.003` AND grid is long-biased | Warning: "High positive funding rate — long grid pays significant funding costs" |
-
-**Daily funding yield formula**:
-```
-daily_yield_pct = abs(funding_rate) × 3 × 100
-```
-
-#### 1.7 Output Format (Step 1)
-
-Present each symbol's strategy in this exact format:
-
-```
-针对 XXXUSDT：
-  策略类型    : 合约中性网格（Neutral）
-  网格类型    : Geometric 等比
-  当前价格    : $xx.xxxx
-  网格区间    : $xx.xxxx — $xx.xxxx
-  网格数量    : XX grids
-  网格比率(r) : X.XXXXXX
-  单格利润率  : X.XX%（扣 0.04% 手续费后）
-  杠杆倍数    : Xx
-  5%硬止损位  : $xx.xxxx（下轨下方5%）
-  强平价估算  : $xx.xxxx
-  24h波动率   : XX.XX%
-  支撑 / 压力 : $xx.xxxx / $xx.xxxx
-  Funding提醒 : funding rate -0.012%，多头网格每日预期收益 +0.036%
-  网格评分    : XX/100
+**Funding Alpha**:
+```python
+if funding_rate < 0 and grid_direction == "long":
+    daily_yield = abs(funding_rate) * 3 * 100  # 3 settlements per day
+    alert(INFO, f"Negative funding: long grid earns +{daily_yield:.3f}%/day")
 ```
 
 ---
 
-### Step 2: Smart Money Signal Validation (聪明钱验证)
+### Step 6: Smart Money & Security Bonus
 
-Cross-validate screened symbols against Smart Money signals.
+**Optional enhancement** — adds bonus points to grid score:
 
-*   **Skill**: `trading-signal`
-*   **API**: `POST https://web3.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/web/signal/smart-money`
-*   **Request Body**:
-    ```json
-    {
-        "page": 1,
-        "pageSize": 20,
-        "chainId": "CT_501"
-    }
-    ```
-*   **Scoring**: If a screened symbol has an active BUY signal → add +15 to grid score, mark "Smart Money: BUY".
+```
+GET trading-signal → Smart Money BUY signal → +15 points
+GET query-token-audit → SAFE result → +5 points
+```
 
 ---
 
-### Step 3: Security Audit (安全审计)
+### Step 7: Real-Time Monitoring
 
-For BSC-based tokens (BEP-20), run a security audit before finalizing recommendations.
+After grid deployment, run continuous monitoring via `monitor.py`:
 
-*   **Skill**: `query-token-audit`
-*   **API**: `POST https://web3.binance.com/bapi/defi/v1/public/wallet-direct/security/token/audit`
-*   **Request Body**:
-    ```json
-    {
-        "binanceChainId": "56",
-        "contractAddress": "<contract_address>",
-        "requestId": "<uuid-v4>"
-    }
-    ```
-*   **Note**: For major CEX perpetual contracts (BTC, ETH, SOL, etc.) without a BSC contract address, skip this step — no security penalty applied.
-*   **Decision**:
-    *   **SAFE**: Add +5 to score, display "Security: PASSED"
-    *   **WARNING**: Proceed with prominent risk warning
-    *   **DANGEROUS**: Auto-exclude from recommendations
-
----
-
-### Step 4: Fee Optimization (费用优化, Optional)
-
-Requires `BINANCE_API_KEY`.
-
-*   **Skill**: `assets`
-*   **API**: `GET /sapi/v1/bnbBurn` — check BNB burn status
-*   **API**: `GET /fapi/v2/balance` (via `derivatives-trading-usds-futures`) — check futures account balance
-*   **Authentication**: Required (API Key + HMAC-SHA256 signature)
-*   **Action**: If `feeBurn` is `false`, recommend enabling it. With BNB burn, maker fee drops from 0.04% to 0.02%, increasing per-grid profit by ~0.04%.
-
----
-
-### Step 5: Performance Monitoring & Alerting (性能监控)
-
-After a grid is activated, use the `GridPerformanceMonitor` (defined in `monitor.py`) for real-time health tracking across four dimensions:
-
-#### 5.1 Grid Performance
+#### 7.1 Grid Performance
 
 | Condition | Alert Level | Action |
 | :--- | :--- | :--- |
-| PnL ≤ −5% of invested capital | **CRITICAL** | Recommend stopping the grid immediately |
-| PnL ≤ −3% of invested capital | **HIGH** | Prompt user to review grid settings |
-| Fill rate ≤ 5% (grid stalled) | **HIGH** | Suggest range adjustment or market exit |
-| Fill rate ≤ 20% (low activity) | **MEDIUM** | Advisory: market may be trending |
-| PnL ≥ +5% milestone reached | **INFO** | Positive status update to user |
+| PnL ≤ −5% | **CRITICAL** | Recommend closing grid |
+| PnL ≤ −3% | **HIGH** | Warn of underperformance |
+| Fill rate ≤ 5% | **CRITICAL** | Grid may be too wide |
+| Fill rate ≤ 20% | **MEDIUM** | Consider tightening grid |
 
-#### 5.2 Market Condition
+#### 7.2 Market Condition
 
 | Condition | Alert Level | Action |
 | :--- | :--- | :--- |
 | Price within 3% of grid boundary | **CRITICAL** | Warn of imminent breakout |
-| Price within 8% of grid boundary | **HIGH** | Advisory: monitor closely |
-| Price exits grid range entirely | **CRITICAL** | Notify grid is now inactive |
-| Volume ≥ 2.5× 24h average | **CRITICAL** | Breakout signal — review position |
-| Price drifted >2% from entry | **MEDIUM** | Suggest re-centering the grid |
+| Price exits grid range entirely | **CRITICAL** | Grid is now inactive |
+| Volume ≥ 2.5× 24h average | **CRITICAL** | Breakout signal — review |
 
-#### 5.3 Risk Management (Futures-Specific)
+#### 7.3 Risk Management (Futures-Specific)
 
 | Condition | Alert Level | Action |
 | :--- | :--- | :--- |
 | Price within 2% of stop-loss | **CRITICAL** | Immediate stop-loss warning |
-| Price within 5% of stop-loss | **HIGH** | Prepare for potential stop-loss execution |
-| Price within 10% of liquidation price | **CRITICAL** | Emergency: reduce leverage or add margin |
+| Price within 10% of liquidation | **CRITICAL** | Reduce leverage or add margin |
 | Drawdown from peak ≥ 8% | **CRITICAL** | Recommend emergency exit |
-| Funding rate turns positive (>0.1%) | **HIGH** | Long grid now paying funding — review |
+| Funding rate turns positive (>0.1%) | **HIGH** | Long grid now paying funding |
 
-#### 5.4 API Health
+#### 7.4 API Health
 
 | Condition | Alert Level | Action |
 | :--- | :--- | :--- |
-| Average latency ≥ 3000ms | **HIGH** | Warn of degraded data freshness |
-| Error rate ≥ 20% | **HIGH** | Warn of unreliable data |
-| Fallback endpoint active | **MEDIUM** | Notify primary API is unreachable |
+| Average latency ≥ 3000ms | **HIGH** | Degraded data freshness |
+| Error rate ≥ 20% | **HIGH** | Unreliable data |
 
-#### 5.5 Funding Rate Monitoring (New in v5.0)
+---
 
-```python
-# In the agent monitoring loop:
-if funding_rate < 0 and grid_direction == "long":
-    alert_funding_profit(expected_daily_yield_pct)
+### Step 8: Output Format
 
-if funding_rate > 0.003 and grid_direction == "long":
-    alert(HIGH, f"Funding rate {funding_rate*100:.4f}% is high — long grid paying {funding_rate*3*100:.3f}%/day")
+**Screening Output (Step 3–4)**:
 
-if price < stop_loss_5pct or price < liquidation_price * 1.05:
-    close_all_grids()  # Emergency exit
+```
+【次新币横盘类 — Category A】
+  1. XXXUSDT  当前价 $xx.xx  24h波动率 xx.xx%  支撑 $xx.xx  压力 $xx.xx
+     → 合约上线30天; 成交量萎缩至35%; ATR=1.5%, BB宽=3.2%, ADX=15.3
+  2. ...
+  3. ...
+
+【高波动套利类 — Category B】
+  1. YYYUSDT  当前价 $xx.xx  24h波动率 xx.xx%  支撑 $xx.xx  压力 $xx.xx
+     → 市值$500M; 换手率85%; RV=22.5%/yr; 24h波动=18.3%
+  2. ...
+  3. ...
+```
+
+**Strategy Output (Step 5)**:
+
+```
+  针对 XXXUSDT：
+  策略类型       : 合约中性网格（Neutral）
+  网格类型       : Geometric 等比
+  当前价格       : $xx.xxxx
+  网格区间       : $xx.xxxx — $xx.xxxx
+  网格数量       : 40 grids
+  网格比率(r)    : 1.xxxxxx
+  单格利润率     : 0.xx%（扣 0.04% 手续费后）
+  杠杆倍数       : 5×
+  5%硬止损位     : $xx.xxxx（下轨下方5%）
+  强平价估算     : $xx.xxxx
+  24h波动率      : xx.xx%
+  支撑 / 压力    : $xx.xxxx / $xx.xxxx
+  市值           : $xxxM  换手率: xx.x%
+  Funding提醒    : funding rate -0.0120%，多头网格每日预期收益 +0.036%
+  网格评分       : xx/100
 ```
 
 ---
 
 ## Authentication
 
-This skill **does not require** a Binance API key for its core market scanning, screening, and grid calculation functions. All public endpoints (`/fapi/v1/exchangeInfo`, `/fapi/v1/ticker/24hr`, `/fapi/v1/premiumIndex`, `/fapi/v1/klines`, `/fapi/v1/openInterest`) are accessible without authentication.
+This skill **does not require** a Binance API key for its core screening and grid calculation functions. All public endpoints are accessible without authentication.
 
 An API key is required only for account-specific features (balance checks, fee optimization, order placement):
 
@@ -368,32 +327,27 @@ export BINANCE_API_SECRET="your_secret_key"
 
 ---
 
-## User-Agent Header
-
-When making API calls via the `derivatives-trading-usds-futures` skill, include:
+## User-Agent Headers
 
 ```
-User-Agent: crayfish-grid-hunter/5.0.0 (derivatives-trading-usds-futures Skill)
-```
-
-When making API calls via `trading-signal` or `query-token-audit` skills, include:
-
-```
-User-Agent: crayfish-grid-hunter/5.0.0 (binance-web3 Skill)
+derivatives-trading-usds-futures: crayfish-grid-hunter/5.2.0 (derivatives-trading-usds-futures Skill)
+query-token-info / trading-signal / query-token-audit: crayfish-grid-hunter/5.2.0 (binance-web3 Skill)
 ```
 
 ---
 
 ## Grid Score Reference
 
-The composite grid score (0–100+) is calculated as follows:
-
-| Component | Max Points | Criteria |
-| :--- | :--- | :--- |
-| Sideways strength (Cat A) | 40 | ATR < 2%, BB-width < 5%, ADX < 20 |
-| Listing recency (Cat A) | 20 | Newer listing = higher score |
-| Realized volatility (Cat B) | 40 | Higher RV = higher score (capped at 40) |
-| Turnover ratio (Cat B) | 30 | Higher Vol/OI = higher score |
-| Optimal 24h vol (Cat B) | 30 | 15%–25% range = max score |
-| Smart Money BUY signal | +15 | Active BUY signal from `trading-signal` |
-| Security audit SAFE | +5 | SAFE result from `query-token-audit` |
+| Component | Max Points | Category | Criteria |
+| :--- | :--- | :--- | :--- |
+| ATR 横盘强度 | 25 | A | ATR < 2% |
+| BB 窄幅强度 | 25 | A | BB width < 5% |
+| ADX 无趋势 | 20 | A | ADX < 20 |
+| 成交量萎缩 | 15 | A | Vol < 50% of 7d avg |
+| 上线时间新 | 15 | A | Newer = higher |
+| 实现波动率 | 30 | B | Higher RV = higher |
+| 换手率 | 25 | B | Higher turnover = higher |
+| 最优24h波动 | 25 | B | 15%–25% = max |
+| 量能强度 | 20 | B | Higher volume = higher |
+| Smart Money BUY | +15 | Both | Active BUY signal |
+| Security SAFE | +5 | Both | SAFE audit result |

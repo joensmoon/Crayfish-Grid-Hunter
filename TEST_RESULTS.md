@@ -1,70 +1,49 @@
-# Crayfish Grid Hunter v5.0 — Test Results
+# Crayfish Grid Hunter v5.2.0 - Algorithm Test Results
 
-**Version**: 5.0.0
-**Date**: 2026-03-15
-**Test Suite**: `test_grid_hunter.py`
-**Result**: All 43 tests PASSED
+**Date**: 2026-03-14  
+**Status**: `PASSED` (72/72 Tests)  
+**Test Suite**: `test_grid_hunter.py` (Mock Data)
 
----
+## Summary of Results
 
-## Test Summary
-
-| Test Group | Tests | Status |
+| Test Group | Purpose | Result |
 | :--- | :--- | :--- |
-| TEST 1: FuturesSymbol — Listing Age | 4 | PASS |
-| TEST 2: TechnicalAnalysis — Sideways Indicators | 6 | PASS |
-| TEST 3: TechnicalAnalysis — High Volatility Indicators | 2 | PASS |
-| TEST 4: Geometric Grid — Core Calculation | 8 | PASS |
-| TEST 5: Geometric Ratio r^n = upper/lower | 2 | PASS |
-| TEST 5b: Minimum Profit Enforcement | 1 | PASS |
-| TEST 5c: Bollinger Band 20-Period Precision | 2 | PASS |
-| TEST 6: Category A — Recent Listings Screening | 3 | PASS |
-| TEST 7: Category B — High Volatility Screening | 2 | PASS |
-| TEST 8: Monitor — v4.4 Regression Checks | 5 | PASS |
-| TEST 9: Futures Monitor — Funding & Liquidation | 6 | PASS |
-| TEST 10: Grid Display Format | 8 | PASS |
-| **Total** | **49** | **All PASSED** |
+| **Group 1** | FuturesSymbol — Contract Age & Classification (≤90 days) | ✅ PASS |
+| **Group 2** | TechnicalAnalysis — Sideways Market Indicators | ✅ PASS |
+| **Group 3** | Bollinger Band — Standard 20-Period Precision | ✅ PASS |
+| **Group 4** | TokenMarketData — Market Cap & Turnover Calculation | ✅ PASS |
+| **Group 5** | Geometric Grid — Core Calculation (r^n = upper/lower) | ✅ PASS |
+| **Group 5b** | Minimum Profit Enforcement (≥ 0.8% net profit) | ✅ PASS |
+| **Group 6** | Category A — Recent Contract Listings Screening | ✅ PASS |
+| **Group 7** | Category B — High Volatility Arbitrage Screening | ✅ PASS |
+| **Group 8** | Funding Rate & Risk Alerts | ✅ PASS |
+| **Group 9** | Monitor — Existing Alert Checks (v4.4 regression) | ✅ PASS |
+| **Group 10** | Futures Monitor — Funding & Liquidation | ✅ PASS |
+| **Group 11** | Grid Display Format Validation | ✅ PASS |
+| **Group 12** | Output Formatting | ✅ PASS |
 
----
+## Key Validations in v5.2.0
 
-## Key Validation Results
+### 1. Dual-Category Screening (Pure Official Skills)
+- **Category A (次新币横盘类)**: Verified that contracts must be onboarded within 90 days (`is_recent_contract`), and volume must shrink to < 50% of the 7-day average.
+- **Category B (高波动套利类)**: Verified that `marketCap` must be strictly between $200M and $1B, and turnover rate (quoteVolume / marketCap) must exceed 50%. Uses `query-token-info` instead of third-party APIs.
 
-### Geometric Grid Algorithm
+### 2. Geometric Grid Math
+- Verified the geometric ratio formula `r = (upper / lower)^(1/n)`.
+- Verified that `r^n ≈ upper / lower` (tolerance < 0.001).
+- Verified equal ratio across all adjacent grid levels (variance < 1e-10).
 
-- **r^n = upper/lower**: Verified with tolerance < 0.01 (actual diff: 6.6e-7)
-- **Equal ratio**: All grid intervals share the same ratio; variance < 1e-10
-- **Profit/grid >= 0.8%**: Enforced even for narrow price ranges via n_adjusted recalculation
-- **Stop-loss = lower x 0.95**: Exact 5% hard stop below lower bound
+### 3. Minimum Profit Enforcement
+- Verified that net profit per grid `(r - 1 - 2*0.0004)` is strictly ≥ 0.8%.
+- If a narrow range is given, the algorithm correctly reduces the grid count to maintain the 0.8% minimum.
 
-### Dual-Category Screening
+### 4. Funding & Liquidation
+- Negative funding triggers an `INFO` alert for long grids, estimating daily yield.
+- Price dropping near liquidation (`liquidation_price * 1.05`) triggers a `CRITICAL` alert.
 
-- **Category A (次新币横盘类)**: Correctly filters to symbols listed within 60 days with
-  sideways indicators (ATR < 2%, BB-width < 5%, or ADX < 20). Old symbols (>60 days) excluded.
-- **Category B (高波动套利类)**: Correctly filters to symbols with RV > 15%/yr and
-  Vol/OI > 0.30. Low-volatility symbols excluded.
+## How to Run the Tests
 
-### Futures Monitor — Funding & Liquidation (v5.0 New)
-
-| Scenario | Expected Level | Result |
-| :--- | :--- | :--- |
-| Negative funding rate (long grid) | INFO — earns funding | PASS |
-| Price below stop-loss | CRITICAL — close all grids | PASS |
-| Price within 5% of liquidation | CRITICAL — reduce leverage | PASS |
-| Funding rate > 0.5% (extreme) | CRITICAL — impacting profitability | PASS |
-| Funding rate > 0.3% (high) | HIGH — consider short-biased grid | PASS |
-| Positive funding (short grid) | INFO — short grid earns funding | PASS |
-
-### Technical Indicator Precision
-
-- **Bollinger Bands**: Confirmed to use exactly the last 20 closes (not all available data)
-- **ATR(14)**: Sideways synthetic data produces ATR < 5% as expected
-- **Realized Volatility**: High-volatility synthetic data (sigma=2.5%) produces annualized RV > 10%
-
----
-
-## API Connectivity Note
-
-The `derivatives-trading-usds-futures` skill uses `fapi.binance.com`, which is geo-restricted
-in the test sandbox (HTTP 451). This is expected — the sandbox is not a Binance-eligible region.
-In the OpenClaw production environment (user's local machine), all `fapi.binance.com` endpoints
-are fully accessible. All algorithm tests use synthetic data and do not require live API access.
+```bash
+cd Crayfish-Grid-Hunter
+python3 test_grid_hunter.py
+```

@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.2.0] - 2026-03-15
+
+### Changed — Dual-Category Logic & Pure Official Skills
+
+*   **Category A (次新币横盘类) Definition Updated**:
+    *   Now correctly defined as "Contracts listed within 90 days" (`onboardDate <= 90 days`), matching user intent.
+    *   Added Volume Shrinkage check: 24h volume must be < 50% of the 7-day average.
+    *   Sideways confirmation requires ATR < 2% or BB-width < 5% or ADX < 20.
+*   **Category B (高波动套利类) Definition Updated**:
+    *   **Pure Official Skill**: Now uses Binance's official `query-token-info` skill to fetch Market Cap, eliminating the need for third-party APIs (like CoinAnk).
+    *   Market Cap constraint: Strictly between $200M and $1B.
+    *   True Turnover Rate: `quoteVolume / marketCap > 50%`.
+*   **Trigger Words Simplified**: "次新币网格", "高波动套利", "网格猎手".
+
+### Changed — Geometric Grid Enforcement
+
+*   **Minimum Profit Guarantee**: Algorithm now automatically recalculates and reduces grid count if `profit_per_grid` falls below 0.8% (after 0.04% maker fee deduction).
+*   **Negative Funding Alpha**: Long grids on negative funding rate pairs now output expected daily yield.
+
 ## [5.0.0] - 2026-03-15
 
 ### Breaking Changes
