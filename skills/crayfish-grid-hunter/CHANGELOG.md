@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.0.0] — 2026-03-15
+
+### 新增
+- **`progress.py`**: 进度条模块，包含 `ProgressBar`、`StepProgress`、`format_table`、`format_error`、`format_warning`、`format_success`
+- **`param_advisor.py`**: 参数优化建议引擎，包含 `ParameterAdvisor`、`MarketRegime`、`detect_market_regime`
+- **`api_server.py`**: REST API 服务器（FastAPI）+ `WebhookClient` 支持
+- **`install.sh`**: 一键安装脚本
+- **`docs/QUICK_START.md`**: 5分钟快速开始指南
+- **`docs/EXAMPLES.md`**: 丰富使用示例
+- **`docs/CONFIGURATION.md`**: 详细配置参数说明
+- **`docs/ADVANCED.md`**: 高级使用指南（API、Webhook、回测集成）
+
+### 改进
+- **`grid_hunter_v5.py`**: `run_dual_category_scan()` 新增实时进度条显示、每步状态反馈、友好错误信息
+- **`grid_hunter_v5.py`**: `format_scan_output()` 升级为表格化结果展示 + 参数优化建议集成
+- **`backtester.py`**: `format_report()` 新增综合评定（优秀/良好/一般/亏损）、中文化输出、止损触发建议
+- **`SKILL.md`**: 升级到 v2.0.0，新增安装说明、模块列表
+
+### 测试
+- 新增 `test_v2_features.py`: 90 个测试用例覆盖所有 v2.0 新功能
+- 全部 162 个测试 (72 个原有 + 90 个新增) 全部通过
+
 ## [1.0.0] - 2026-03-15
 
 ### Added — Official Release (v1.0.0)

@@ -356,7 +356,7 @@ class GridBacktester:
 
     @staticmethod
     def format_report(result: BacktestResult) -> str:
-        """Format backtest result as a human-readable report."""
+        """Format backtest result as a human-readable report with performance rating."""
         c = result.config
         start_dt = datetime.fromtimestamp(result.start_time / 1000).strftime("%Y-%m-%d") if result.start_time else "N/A"
         end_dt = datetime.fromtimestamp(result.end_time / 1000).strftime("%Y-%m-%d") if result.end_time else "N/A"
@@ -364,46 +364,66 @@ class GridBacktester:
         pnl_sign = "+" if result.net_pnl >= 0 else ""
         roi_sign = "+" if result.roi_pct >= 0 else ""
 
+        # Performance rating
+        if result.stop_loss_triggered:
+            rating = "❌ 高风险 (止损触发)"
+        elif result.roi_pct > 20 and result.sharpe_ratio > 2:
+            rating = "🏆 优秀 (ROI>{:.0f}%, 夏普>{:.1f})".format(result.roi_pct, result.sharpe_ratio)
+        elif result.roi_pct > 10:
+            rating = "✅ 良好 (ROI>{:.0f}%)".format(result.roi_pct)
+        elif result.roi_pct > 0:
+            rating = "🟡 一般 (ROI>{:.1f}%)".format(result.roi_pct)
+        else:
+            rating = "🔴 亏损 (ROI{:.1f}%)".format(result.roi_pct)
+
+        profit_factor_str = (
+            f"{result.profit_factor:.2f}"
+            if result.profit_factor != float('inf')
+            else "∞ (无亏损交易)"
+        )
+
         lines = [
-            f"\n{'='*60}",
-            f"  CRAYFISH GRID HUNTER v{VERSION} — BACKTEST REPORT",
+            f"\n{'='*65}",
+            f"  📊 CRAYFISH GRID HUNTER v{VERSION} — 回测报告",
             f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            f"{'='*60}",
+            f"{'='*65}",
             f"",
-            f"  Symbol           : {c.symbol}",
-            f"  Period           : {start_dt} → {end_dt} ({result.total_candles} candles, {c.interval})",
-            f"  Grid Type        : {c.grid_type.capitalize()} ({c.grid_count} grids)",
-            f"  Grid Range       : ${c.lower_price:.4f} — ${c.upper_price:.4f}",
-            f"  Leverage         : {c.leverage}×",
-            f"  Initial Margin   : ${c.initial_margin:.2f} USDT",
-            f"  Total Position   : ${c.total_position:.2f} USDT",
+            f"  标的           : {c.symbol}  [综合评定: {rating}]",
+            f"  回测周期       : {start_dt} → {end_dt} ({result.total_candles} 根K线, {c.interval})",
+            f"  网格类型       : {c.grid_type.capitalize()} 等比网格 ({c.grid_count} 格)",
+            f"  网格区间       : ${c.lower_price:.4f} — ${c.upper_price:.4f}",
+            f"  杠杆倍数       : {c.leverage}×",
+            f"  初始保证金     : ${c.initial_margin:.2f} USDT",
+            f"  总仓位规模     : ${c.total_position:.2f} USDT",
             f"",
-            f"  --- Performance ---",
-            f"  Net PnL          : {pnl_sign}${result.net_pnl:.2f} USDT ({roi_sign}{result.roi_pct:.2f}%)",
-            f"  Total Fees       : ${result.total_fees:.2f} USDT",
-            f"  Max Drawdown     : {result.max_drawdown_pct:.2f}%",
-            f"  Sharpe Ratio     : {result.sharpe_ratio:.2f}",
-            f"  Profit Factor    : {result.profit_factor:.2f}" if result.profit_factor != float('inf') else f"  Profit Factor    : ∞ (no losses)",
+            f"  ─── 收益表现 ───",
+            f"  净收益 (Net PnL)  : {pnl_sign}${result.net_pnl:.2f} USDT  ({roi_sign}{result.roi_pct:.2f}%)",
+            f"  总手续费         : ${result.total_fees:.2f} USDT",
+            f"  最大回撤         : {result.max_drawdown_pct:.2f}%",
+            f"  夏普比率         : {result.sharpe_ratio:.2f}",
+            f"  盈亏比           : {profit_factor_str}",
             f"",
-            f"  --- Trades ---",
-            f"  Total Trades     : {result.total_trades} ({result.buy_trades} buys, {result.sell_trades} sells)",
-            f"  Win Rate         : {result.winning_trades}/{result.sell_trades} ({result.winning_trades/max(result.sell_trades,1)*100:.1f}%)",
-            f"  Avg Profit/Trade : ${result.avg_profit_per_trade:.4f} USDT",
-            f"  Fills/Day        : {result.fills_per_day:.1f}",
+            f"  ─── 交易统计 ───",
+            f"  总交易次数       : {result.total_trades} 次 ({result.buy_trades} 买入 / {result.sell_trades} 卖出)",
+            f"  胜率             : {result.winning_trades}/{result.sell_trades} ({result.winning_trades/max(result.sell_trades,1)*100:.1f}%)",
+            f"  单笔均盈         : ${result.avg_profit_per_trade:.4f} USDT",
+            f"  日均成交次数     : {result.fills_per_day:.1f} 次/天",
             f"",
-            f"  --- Market ---",
-            f"  Price Start      : ${result.price_start:.4f}",
-            f"  Price End        : ${result.price_end:.4f}",
-            f"  Price Range      : ${result.price_low:.4f} — ${result.price_high:.4f}",
-            f"  Time in Range    : {result.time_in_range_pct:.1f}%",
-            f"  Grid Utilization : {result.grid_levels_touched}/{len(GridBacktester(c).grid_levels)} levels ({result.grid_utilization_pct:.1f}%)",
+            f"  ─── 市场表现 ───",
+            f"  开始价格         : ${result.price_start:.4f}",
+            f"  结束价格         : ${result.price_end:.4f}",
+            f"  价格区间         : ${result.price_low:.4f} — ${result.price_high:.4f}",
+            f"  区间内时间占比   : {result.time_in_range_pct:.1f}%",
+            f"  网格利用率       : {result.grid_levels_touched}/{len(GridBacktester(c).grid_levels)} 格 ({result.grid_utilization_pct:.1f}%)",
         ]
 
         if result.stop_loss_triggered:
             sl_dt = datetime.fromtimestamp(result.stop_loss_time / 1000).strftime("%Y-%m-%d %H:%M") if result.stop_loss_time else "N/A"
-            lines.append(f"  ⚠ STOP-LOSS      : Triggered at {sl_dt}")
+            lines.append(f"")
+            lines.append(f"  ⚠️ 止损触发       : {sl_dt}")
+            lines.append(f"  💡 建议: 尝试降低杠杆倍数或放宽止损位以提高策略鲁棒性。")
 
-        lines.append(f"\n{'='*60}")
+        lines.append(f"\n{'='*65}")
         return "\n".join(lines)
 
 

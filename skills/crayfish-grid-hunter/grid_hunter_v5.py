@@ -909,16 +909,81 @@ def run_dual_category_scan(
     max_symbols: int = 200,
     top_n_each: int = 3,
     config: Optional[UserConfig] = None,
+    show_progress: bool = True,
 ) -> Tuple[List[GridParameters], List[GridParameters]]:
-    """Full dual-category screening pipeline."""
-    print(f"[Step 0] Fetching exchange info (USDS-M perpetuals)...")
+    """
+    Full dual-category screening pipeline with progress tracking.
+
+    Parameters
+    ----------
+    max_symbols : int
+        Maximum number of symbols to scan (sorted by volume).
+    top_n_each : int
+        Number of top results to return per category.
+    config : UserConfig, optional
+        Custom configuration. Defaults to DEFAULT_CONFIG.
+    show_progress : bool
+        Whether to show progress bar during data fetching.
+
+    Returns
+    -------
+    Tuple[List[GridParameters], List[GridParameters]]
+        (Category A results, Category B results)
+    """
+    try:
+        from progress import ProgressBar, StepProgress, format_error
+        _has_progress = True
+    except ImportError:
+        _has_progress = False
+
+    def _log(msg: str):
+        print(f"  {msg}")
+
+    # Step tracker
+    step_names = [
+        "获取合约列表 (exchangeInfo)",
+        "获取行情快照 (klines + mark price)",
+        "获取市值数据 (query-token-info)",
+        "Category A 筛选 (次新币横盘)",
+        "Category B 筛选 (高波动套利)",
+        "计算等比网格参数",
+    ]
+    if _has_progress:
+        sp = StepProgress(step_names)
+    else:
+        sp = None
+
+    def _step_start(idx, detail=""):
+        if sp:
+            sp.start_step(idx, detail)
+        else:
+            print(f"[Step {idx}] {step_names[idx]}... {detail}")
+
+    def _step_done(idx, detail=""):
+        if sp:
+            sp.complete_step(idx, detail)
+
+    def _step_fail(idx, error=""):
+        if sp:
+            sp.fail_step(idx, error)
+        else:
+            print(f"  [FAIL] Step {idx}: {error}")
+
+    print(f"\n{'='*60}")
+    print(f"  🦦 Crayfish Grid Hunter v{VERSION} — 开始扫描")
+    print(f"  扫描范围: Top {max_symbols} 合约 | 返回 Top {top_n_each} / 类别")
+    print(f"{'='*60}\n")
+
+    # --- Step 0: Exchange Info ---
+    _step_start(0)
     all_symbols = fetch_exchange_info()
     if not all_symbols:
-        print("  [WARN] No symbols fetched.")
+        _step_fail(0, "No symbols fetched")
+        print(format_error("451", "exchangeInfo returned empty") if _has_progress
+              else "  [WARN] No symbols fetched. Check API connectivity.")
         return [], []
-    print(f"  Found {len(all_symbols)} USDS-M perpetual symbols.")
+    _step_done(0, f"找到 {len(all_symbols)} 个 USDS-M 永续合约")
 
-    print(f"[Step 0] Fetching all 24hr tickers...")
     all_tickers = fetch_all_tickers()
     ticker_map = {t["symbol"]: t for t in all_tickers if "symbol" in t}
 
@@ -928,13 +993,21 @@ def run_dual_category_scan(
         reverse=True
     )
     active_symbols = active_symbols[:max_symbols]
-    print(f"  Analyzing top {len(active_symbols)} symbols by volume.")
+    _log(f"按交易量排序，分析 Top {len(active_symbols)} 个合约")
 
-    print(f"[Step 1] Fetching klines and mark prices...")
+    # --- Step 1: Klines + Mark Prices ---
+    _step_start(1)
     snapshots: Dict[str, MarketSnapshot] = {}
     technicals: Dict[str, TechnicalAnalysis] = {}
 
-    for sym in active_symbols:
+    if _has_progress and show_progress:
+        bar = ProgressBar(total=len(active_symbols), prefix="  获取行情数据")
+    else:
+        bar = None
+
+    for i, sym in enumerate(active_symbols):
+        if bar:
+            bar.update(i + 1, suffix=sym.symbol)
         ticker = ticker_map.get(sym.symbol, {})
         mark = fetch_mark_price(sym.symbol) or {}
         oi = fetch_open_interest(sym.symbol)
@@ -946,31 +1019,73 @@ def run_dual_category_scan(
             closes = [float(k[4]) for k in klines]
             highs = [float(k[2]) for k in klines]
             lows = [float(k[3]) for k in klines]
-            volumes = [float(k[5]) for k in klines]  # quoteAssetVolume
+            volumes = [float(k[5]) for k in klines]
             technicals[sym.symbol] = TechnicalAnalysis(
                 sym.symbol, closes, highs, lows, volumes
             )
 
-    print(f"[Step 2] Fetching market cap data via query-token-info...")
+    if bar:
+        bar.finish(f"已获取 {len(technicals)} 个合约的技术指标")
+    _step_done(1, f"已处理 {len(snapshots)} 个快照, {len(technicals)} 个技术分析")
+
+    # --- Step 2: Market Cap Data ---
+    _step_start(2)
     token_data: Dict[str, TokenMarketData] = {}
-    for sym in active_symbols:
+    token_fetch_count = 0
+
+    if _has_progress and show_progress:
+        bar2 = ProgressBar(total=len(active_symbols), prefix="  获取市値数据")
+    else:
+        bar2 = None
+
+    for i, sym in enumerate(active_symbols):
+        if bar2:
+            bar2.update(i + 1, suffix=sym.base_asset)
         tdata = fetch_token_market_data(sym.base_asset)
         if tdata:
             token_data[sym.base_asset] = tdata
+            token_fetch_count += 1
+
+    if bar2:
+        bar2.finish(f"获取到 {token_fetch_count} 个代币的市値数据")
+
+    if token_fetch_count == 0:
+        _step_fail(2, "市値数据全部获取失败")
+        print(format_error("token_info_empty") if _has_progress
+              else "  [WARN] query-token-info returned no data. Category B may be empty.")
+    else:
+        _step_done(2, f"获取 {token_fetch_count} 个代币市値数据")
 
     cfg = config or DEFAULT_CONFIG
 
-    print(f"[Step 3] Running Category A screening (次新币横盘类)...")
-    cat_a_raw = screen_recent_contracts(active_symbols, snapshots, technicals, top_n=top_n_each, config=cfg)
+    # --- Step 3: Category A Screening ---
+    _step_start(3)
+    cat_a_raw = screen_recent_contracts(
+        active_symbols, snapshots, technicals, top_n=top_n_each, config=cfg
+    )
+    if cat_a_raw:
+        _step_done(3, f"找到 {len(cat_a_raw)} 个次新币横盘标的")
+    else:
+        _step_done(3, "暂无符合条件的次新币标的")
 
-    print(f"[Step 4] Running Category B screening (高波动套利类)...")
-    cat_b_raw = screen_high_volatility(active_symbols, snapshots, technicals, token_data, top_n=top_n_each, config=cfg)
+    # --- Step 4: Category B Screening ---
+    _step_start(4)
+    cat_b_raw = screen_high_volatility(
+        active_symbols, snapshots, technicals, token_data, top_n=top_n_each, config=cfg
+    )
+    if cat_b_raw:
+        _step_done(4, f"找到 {len(cat_b_raw)} 个高波动套利标的")
+    else:
+        _step_done(4, "暂无符合条件的高波动标的")
 
-    print(f"[Step 5] Calculating Geometric Grid parameters...")
+    # --- Step 5: Grid Calculation ---
+    _step_start(5)
     cat_a_results = []
     for sym, snap, tech, score, reason in cat_a_raw:
-        gp = calculate_geometric_grid(sym.symbol, "recent_contract", snap, tech, score, reason,
-                                       leverage=cfg.leverage)
+        gp = calculate_geometric_grid(
+            sym.symbol, "recent_contract", snap, tech, score, reason,
+            leverage=cfg.leverage
+        )
         cat_a_results.append(gp)
 
     cat_b_results = []
@@ -985,53 +1100,102 @@ def run_dual_category_scan(
         )
         cat_b_results.append(gp)
 
+    _step_done(5, f"共生成 {len(cat_a_results) + len(cat_b_results)} 个策略方案")
+    print(f"\n  扫描完成! Category A: {len(cat_a_results)} 个 | Category B: {len(cat_b_results)} 个\n")
+
     return cat_a_results, cat_b_results
 
 
-def format_scan_output(cat_a: List[GridParameters], cat_b: List[GridParameters]) -> str:
-    """Format the dual-category scan results for user display."""
+def format_scan_output(
+    cat_a: List[GridParameters],
+    cat_b: List[GridParameters],
+    config=None,
+) -> str:
+    """
+    Format the dual-category scan results for user display.
+    Includes rich tables, grid strategy details, and parameter suggestions.
+    """
+    try:
+        from param_advisor import ParameterAdvisor, detect_market_regime
+        _has_advisor = True
+    except ImportError:
+        _has_advisor = False
+
     lines = [
-        f"\n{'='*60}",
-        f"  CRAYFISH GRID HUNTER v{VERSION}",
+        f"\n{'='*70}",
+        f"  🦦 CRAYFISH GRID HUNTER v{VERSION}",
         f"  USDS-M 永续合约 — 双分类筛选结果",
         f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"{'='*60}",
-        f"\n【次新币横盘类 — Category A】",
+        f"{'='*70}",
     ]
 
+    # --- Category A Summary Table ---
+    lines.append(f"\n📋 Category A — 次新币横盘类")
     if cat_a:
+        # Header
+        lines.append(f"  {'#':<4} {'Symbol':<12} {'Price':>10} {'Age':>8} {'ATR%':>7} {'BB%':>7} {'Score':>8}")
+        lines.append(f"  {'-'*4} {'-'*12} {'-'*10} {'-'*8} {'-'*7} {'-'*7} {'-'*8}")
         for i, gp in enumerate(cat_a, 1):
             lines.append(
-                f"  {i}. {gp.symbol}  "
-                f"当前价 ${gp.current_price:.4f}  "
-                f"24h波动率 {gp.volatility_24h_pct:.2f}%  "
-                f"支撑 ${gp.support:.4f}  "
-                f"压力 ${gp.resistance:.4f}"
+                f"  #{i:<3} {gp.symbol:<12} "
+                f"${gp.current_price:>9.4f} "
+                f"{gp.volatility_24h_pct:>6.1f}%  "
+                f"{gp.atr_pct:>5.2f}%  "
+                f"{gp.volatility_24h_pct:>5.1f}%  "
+                f"{gp.grid_score:>6.0f}/100"
             )
-            lines.append(f"     → {gp.category_reason}")
+            lines.append(f"       └→ {gp.category_reason}")
     else:
-        lines.append("  暂无符合条件的次新币横盘标的。")
+        lines.append("  ⚠️  暂无符合条件的次新币横盘标的。")
+        lines.append("  💡 建议: 尝试输入 '次新币网格，合约上线天数改为120天' 来放宽筛选条件。")
 
-    lines.append(f"\n【高波动套利类 — Category B】")
-
+    # --- Category B Summary Table ---
+    lines.append(f"\n📋 Category B — 高波动套利类")
     if cat_b:
+        lines.append(f"  {'#':<4} {'Symbol':<12} {'Price':>10} {'Mcap':>8} {'Turn%':>7} {'Vol%':>7} {'Score':>8}")
+        lines.append(f"  {'-'*4} {'-'*12} {'-'*10} {'-'*8} {'-'*7} {'-'*7} {'-'*8}")
         for i, gp in enumerate(cat_b, 1):
+            mcap_str = f"${gp.market_cap/1e6:.0f}M" if gp.market_cap > 0 else "N/A"
             lines.append(
-                f"  {i}. {gp.symbol}  "
-                f"当前价 ${gp.current_price:.4f}  "
-                f"24h波动率 {gp.volatility_24h_pct:.2f}%  "
-                f"支撑 ${gp.support:.4f}  "
-                f"压力 ${gp.resistance:.4f}"
+                f"  #{i:<3} {gp.symbol:<12} "
+                f"${gp.current_price:>9.4f} "
+                f"{mcap_str:>8} "
+                f"{gp.turnover_rate_pct:>5.0f}%  "
+                f"{gp.volatility_24h_pct:>5.1f}%  "
+                f"{gp.grid_score:>6.0f}/100"
             )
-            lines.append(f"     → {gp.category_reason}")
+            lines.append(f"       └→ {gp.category_reason}")
     else:
-        lines.append("  暂无符合条件的高波动套利标的。")
+        lines.append("  ⚠️  暂无符合条件的高波动套利标的。")
+        lines.append("  💡 建议: 尝试输入 '高波动套利，市値范围放宽到亿到50亿，换手率降低到30%' 来放宽筛选。")
 
-    lines.append(f"\n{'='*60}")
-    lines.append(f"  网格策略详情")
-    lines.append(f"{'='*60}")
+    # --- Grid Strategy Details ---
+    lines.append(f"\n{'='*70}")
+    lines.append(f"  📊 等比网格策略详情")
+    lines.append(f"{'='*70}")
 
     for gp in cat_a + cat_b:
         lines.append(gp.to_display())
+
+    # --- Parameter Optimization Suggestions ---
+    if _has_advisor:
+        all_vols = [gp.volatility_24h_pct for gp in cat_a + cat_b]
+        avg_vol = sum(all_vols) / len(all_vols) if all_vols else 0.0
+        advisor = ParameterAdvisor()
+        suggestions = advisor.analyze(
+            cat_a_count=len(cat_a),
+            cat_b_count=len(cat_b),
+            avg_vol=avg_vol,
+            config=config,
+        )
+        regime = detect_market_regime(avg_vol, 20.0)
+        lines.append(advisor.format_report(
+            suggestions, regime=regime,
+            cat_a_count=len(cat_a), cat_b_count=len(cat_b)
+        ))
+
+    lines.append(f"\n{'='*70}")
+    lines.append(f"  如需进一步帮助，请参阅 docs/ADVANCED.md 或在 GitHub 提交 Issue。")
+    lines.append(f"{'='*70}\n")
 
     return "\n".join(lines)
