@@ -1,143 +1,114 @@
 ---
 name: crayfish-grid-hunter
-description: 币安 USDS-M 合约网格猎手 v2.2。双分类筛选（次新币横盘+高波动套利）→ 历史回测 → Geometric 等比中性网格。必须执行 Python 脚本获取实时数据，严禁 AI 自行生成任何数值。
-version: 2.2.2
+description: 币安 USDS-M 合约网格猎手。双分类筛选（次新币横盘+高波动套利）→ 等比中性网格。所有数据来自币安官方 API 实时获取，严禁 AI 自行生成任何数值。触发词：次新币网格、高波动套利、网格猎手。
+version: 2.3.0
 author: joensmoon
 homepage: https://github.com/joensmoon/Crayfish-Grid-Hunter
 metadata: {"openclaw":{"emoji":"🦞","requires":{"bins":["python3"]},"install":[{"id":"pip-deps","kind":"download","url":"https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/install.sh","label":"Install Python dependencies (requests, tabulate)"}]}}
 ---
 
-# Crayfish Grid Hunter v2.2
+# Crayfish Grid Hunter v2.3
 
-币安 USDS-M 永续合约智能网格交易助手。集成双分类筛选引擎、历史回测系统和等比中性网格算法。
+币安 USDS-M 永续合约智能网格交易助手。
 
 ---
 
-## ⚠️ Agent Behavior — 强制执行规则（MUST FOLLOW）
+## CRITICAL: 执行规则（最高优先级，必须遵守）
 
-**这是最高优先级指令。当用户触发此 Skill 时，你（AI Agent）必须严格遵守以下所有规则：**
+**你是 AI Agent。当用户触发此 Skill 时，你必须立即执行以下操作，不得有任何偏差：**
 
-### 规则 1：必须执行脚本，禁止自行生成数据
+### 第一步：立即执行 Python 脚本
 
-你**绝对不能**凭空猜测、捏造或使用内置知识库来生成任何以下内容：
-- 代币/合约名称列表
-- 价格、涨跌幅、波动率数值
-- 网格区间（Lower/Upper）、格数、单格利润
-- 市值、换手率、资金费率
+根据用户意图，选择并执行对应命令：
 
-你**必须**通过终端执行以下命令来获取真实数据：
+| 用户意图 | 执行命令 |
+| :--- | :--- |
+| 次新币网格 / Category A | `python3 {baseDir}/grid_hunter_v5.py --mode cat-a --no-backtest` |
+| 高波动套利 / Category B | `python3 {baseDir}/grid_hunter_v5.py --mode cat-b --no-backtest` |
+| 全量扫描 / 网格猎手 | `python3 {baseDir}/grid_hunter_v5.py --no-backtest` |
+| 带回测 | `python3 {baseDir}/grid_hunter_v5.py` |
 
-```bash
-# 标准执行（次新币网格 + 高波动套利 双分类全量扫描）
-python3 {baseDir}/grid_hunter_v5.py --no-backtest
+**执行方式**：使用系统 bash/exec 工具运行上述命令，等待输出完成。
 
-# 仅次新币网格（Category A）
-python3 {baseDir}/grid_hunter_v5.py --mode cat-a --no-backtest
+### 第二步：原样展示脚本输出
 
-# 仅高波动套利（Category B）
-python3 {baseDir}/grid_hunter_v5.py --mode cat-b --no-backtest
+将脚本的**完整标准输出**原样展示给用户，包括：
+- 扫描摘要（分析了多少合约、发现多少机会）
+- Category A / Category B 筛选结果表格
+- 每个标的的等比网格详情（Lower/Upper/格数/单格利润/强平价/止损位）
+- 参数优化建议（如有）
+- **末尾的签名行**（格式：`⚠ 有效输出必含签名: CRAYFISH-XXXXXXXXXXXX | 生成时间: YYYY-MM-DD HH:MM:SS`）
 
-# 带完整回测（较慢，约 2-3 分钟）
-python3 {baseDir}/grid_hunter_v5.py
-```
+**不得对数值做任何修改、四舍五入或替换。**
 
-> `{baseDir}` 是 OpenClaw 自动注入的本 Skill 目录绝对路径，无需手动替换。
+> 验证方法：真实脚本输出的末尾必含 `CRAYFISH-` 签名。若用户看到的结果没有此签名，说明 AI 没有执行脚本，结果无效。
 
-### 规则 2：必须将脚本输出完整展示给用户
+### 禁止事项（违反将导致用户损失真实资金）
 
-脚本执行成功后，你**必须**将以下内容**原样**展示给用户（不得修改任何数值）：
-1. **摘要表格**（Category A 和 Category B 的筛选结果表格）
-2. **等比网格策略详情**（每个标的的 Lower/Upper/格数/单格利润/强平价/止损位）
-3. **参数优化建议**（如有）
+你**绝对不能**做以下任何事：
 
-### 规则 3：用户自定义参数的处理方式
+- ❌ **禁止**凭空生成代币名称（如 ALPACAUSDT、OPUSDT 等）
+- ❌ **禁止**自行计算或估算价格区间（如"$0.95 - $1.43"）
+- ❌ **禁止**输出"支撑位"、"阻力位"、"推荐配置"等未经脚本计算的内容
+- ❌ **禁止**输出"跨交易所套利"、"三角套利"、"期现套利"等本工具不支持的策略
+- ❌ **禁止**在脚本执行失败时用自己的知识替代输出
+- ❌ **禁止**修改脚本输出的任何数值
 
-当用户用自然语言指定参数时，你必须将其转换为对应的 CLI 参数：
+### 用户自定义参数转换
 
 | 用户说的话 | 对应 CLI 参数 |
 | :--- | :--- |
 | "合约上线天数改为120天" | `--contract-recent-days 120` |
 | "次新币天数改为60天" | `--contract-recent-days 60` |
 | "杠杆5倍" | `--leverage 5` |
-| "杠杆改为10倍" | `--leverage 10` |
 | "市值范围5亿到20亿" | `--mcap-min 500000000 --mcap-max 2000000000` |
 | "换手率30%以上" | `--turnover-min 0.30` |
 | "止损3%" | `--stop-loss-pct 3.0` |
 | "只看前5个结果" | `--top-n 5` |
-| "扫描300个合约" | `--max-symbols 300` |
 
-### 规则 4：严禁输出本工具不支持的内容
+### 脚本执行失败时的处理
 
-以下内容**绝对不能**出现在你的回复中：
-- ❌ "跨交易所套利"
-- ❌ "三角套利（USDT/BTC/ETH）"
-- ❌ "期现套利"
-- ❌ 任何未经脚本计算的"推荐币种"
-- ❌ 任何模糊的"±15%区间"、"10-15层"等手写参数
-
-### 规则 5：脚本执行失败时的处理
-
-如果脚本执行失败（网络超时、API 限流等），你应该：
+若脚本执行失败（网络超时、API 限流等）：
 1. 告知用户具体错误信息
-2. 建议用户检查网络连接
-3. 提示用户参考 `{baseDir}/docs/TROUBLESHOOTING.md`
+2. 建议检查网络连接（币安 API 需要可访问）
+3. 提示参考 `{baseDir}/docs/TROUBLESHOOTING.md`
 4. **不得**用自己的知识替代脚本输出
 
 ---
 
-## 核心能力 (Core Capabilities)
+## 核心能力说明
 
-- **双分类筛选引擎**：Category A（次新币横盘）+ Category B（高波动套利）
-- **历史回测系统**：30 天 1h K线回测，输出 ROI、夏普比率、最大回撤
-- **等比中性网格**：自动计算精确区间，强制执行 ≥0.8% 单格利润
-- **参数优化建议**：基于市场状态（横盘/趋势/高波动）自动建议参数调整
-
-### 次新币定义
+### 次新币定义（Category A）
 
 > **次新币 = 在币安 USDS-M 永续合约市场上线不超过 90 天的合约。**
 
-默认值为 `--contract-recent-days 90`，不需要额外指定。所有候选均来自币安官方 `fapi/v1/exchangeInfo` 接口返回的合约白名单（status=TRADING，contractType=PERPETUAL），**不包含任何未在币安合约市场上线的代币**。
+- 数据来源：`fapi/v1/exchangeInfo`（币安官方接口）
+- 筛选条件：`status=TRADING`、`contractType=PERPETUAL`、`quoteAsset=USDT`
+- **已下架合约（status≠TRADING）自动排除**，不会出现在结果中
+- `onboardDate` 字段精确到毫秒，计算公式：`(now_ms - onboardDate_ms) / 86400000`
 
-## 触发词 (Trigger Keywords)
+### 高波动套利（Category B）
 
-| 触发词 | 执行命令 |
-| :--- | :--- |
-| 次新币网格 | `python3 {baseDir}/grid_hunter_v5.py --mode cat-a --no-backtest` |
-| 高波动套利 | `python3 {baseDir}/grid_hunter_v5.py --mode cat-b --no-backtest` |
-| 网格猎手 / 合约网格 | `python3 {baseDir}/grid_hunter_v5.py --no-backtest` |
-| 带回测 | 去掉 `--no-backtest` 参数 |
+- 24h 涨跌幅绝对值 > 10%
+- 市值 $2亿 - $10亿（防止极小市值操纵）
+- 代币必须在 `fapi/v1/exchangeInfo` 白名单中（严格精确匹配，无 fallback）
 
-## 安装 (Installation)
+---
 
-### 一键安装 (推荐)
+## 安装
+
 ```bash
+# 一键安装
 curl -s https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/install.sh | bash
-```
 
-### 手动安装
-```bash
-# 克隆到 OpenClaw skills 目录
-git clone https://github.com/joensmoon/Crayfish-Grid-Hunter.git \
-  ~/.openclaw/skills/crayfish-grid-hunter-repo
-
-# 安装 Python 依赖
+# 手动安装
+git clone https://github.com/joensmoon/Crayfish-Grid-Hunter.git ~/.openclaw/skills/crayfish-grid-hunter-repo
 pip3 install requests tabulate
-
-# 安装官方依赖 Skills（通过 ClawHub）
-clawhub install binance/derivatives-trading-usds-futures
-clawhub install binance/query-token-info
 ```
 
 ## 依赖 Skills（均为币安官方）
 
 | Skill | 来源 | 用途 |
 | :--- | :--- | :--- |
-| `derivatives-trading-usds-futures` | binance/binance-skills-hub | 合约列表、K线、资金费率、持仓量 |
-| `query-token-info` | binance/binance-skills-hub | 市值、24h 换手率数据 |
-| `trading-signal` | binance/binance-skills-hub | 智能资金信号（可选加分项） |
-| `query-token-audit` | binance/binance-skills-hub | 代币安全审计（可选加分项） |
-| `assets` | binance/binance-skills-hub | BNB 手续费优化检查（可选） |
-
-## 故障排除 (Troubleshooting)
-
-请参考 `{baseDir}/docs/TROUBLESHOOTING.md` 文件，或查看 `{baseDir}/docs/` 目录下的完整文档。
+| `derivatives-trading-usds-futures` | binance/binance-skills-hub | 合约列表、K线、资金费率 |
+| `query-token-info` | binance/binance-skills-hub | 市值、换手率数据 |

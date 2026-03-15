@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "2.2.2"
+VERSION = "2.3.0"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"
@@ -1032,9 +1032,15 @@ def run_dual_category_scan(
         else:
             print(f"  [FAIL] Step {idx}: {error}")
 
+    import hashlib as _hashlib
+    _exec_ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+    _exec_id = _hashlib.md5(f"{time.time()}{VERSION}".encode()).hexdigest()[:8].upper()
     print(f"\n{'='*60}")
-    print(f"  🦦 Crayfish Grid Hunter v{VERSION} — 开始扫描")
+    print(f"  🦞 Crayfish Grid Hunter v{VERSION} — 实时扫描")
+    print(f"  执行时间: {_exec_ts}  |  执行ID: {_exec_id}")
     print(f"  扫描范围: Top {max_symbols} 合约 | 返回 Top {top_n_each} / 类别")
+    print(f"  数据来源: 币安官方 fapi.binance.com (实时)")
+    print(f"  ⚠ 本输出由脚本实时生成，任何未含执行ID的结果均为无效")
     print(f"{'='*60}\n")
 
     # --- Step 0: Exchange Info ---
@@ -1295,8 +1301,12 @@ def format_scan_output(
             cat_a_count=len(cat_a), cat_b_count=len(cat_b)
         ))
 
+    import hashlib as _hl2
+    _ts2 = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    _sig = _hl2.md5(f"{_ts2}{VERSION}{len(cat_a)}{len(cat_b)}".encode()).hexdigest()[:12].upper()
     lines.append(f"\n{'='*70}")
-    lines.append(f"  \u5982\u9700\u8fdb\u4e00\u6b65\u5e2e\u52a9\uff0c\u8bf7\u53c2\u9605 docs/ADVANCED.md \u6216\u5728 GitHub \u63d0\u4ea4 Issue\u3002")
+    lines.append(f"  如需进一步帮助，请参阅 docs/ADVANCED.md 或在 GitHub 提交 Issue。")
+    lines.append(f"  ⚠ 有效输出必含签名: CRAYFISH-{_sig} | 生成时间: {_ts2}")
     lines.append(f"{'='*70}\n")
 
     return "\n".join(lines)
