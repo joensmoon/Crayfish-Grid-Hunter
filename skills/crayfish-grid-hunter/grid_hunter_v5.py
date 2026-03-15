@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"
@@ -80,11 +80,11 @@ class UserConfig:
     All fields have sensible defaults matching the standard strategy.
     Users can override any subset of parameters via natural language:
 
-        "帮我筛选次新币网格，合约上线天数改为60天，杠杆3倍"
-        → UserConfig(contract_recent_days=60, leverage=3)
+        "帮我筛选次新币网格，市值范围5亿到20亿"
+        → UserConfig(mcap_min=500_000_000, mcap_max=2_000_000_000)
 
-        "高波动套利，市值范围5亿到20亿，换手率30%以上"
-        → UserConfig(mcap_min=500_000_000, mcap_max=2_000_000_000, turnover_min=0.30)
+        "高波动套利，换手率30%以上，止损8%"
+        → UserConfig(turnover_min=0.30, stop_loss_pct=8.0)
     """
     # --- Category A: Recent Contract Listings ---
     contract_recent_days: int = CONTRACT_RECENT_DAYS
@@ -649,14 +649,12 @@ def fetch_token_market_data(base_asset: str) -> Optional[TokenMarketData]:
                         create_time=t.get("createTime"),
                     )
 
-        if best is None and tokens:
-            t = tokens[0]
-            best = TokenMarketData(
-                symbol=base_asset,
-                market_cap=float(t.get("marketCap", 0) or 0),
-                volume_24h_usd=float(t.get("volume24h", 0) or 0),
-                create_time=t.get("createTime"),
-            )
+        # IMPORTANT: Do NOT use fallback to tokens[0].
+        # tokens[0] may be a completely different token that happens to appear
+        # first in Web3 search results (e.g. searching "ACE" might return "ACEME").
+        # Only use data when the symbol is an exact match to avoid cross-contamination.
+        # All candidates in screen_high_volatility already come from fapi exchangeInfo
+        # (USDS-M whitelist), so we only need accurate market cap data for those symbols.
 
         if best:
             _set_cache(f"token_info_{base_asset}", best)
@@ -776,6 +774,11 @@ def screen_high_volatility(
       4. Volume confirmation: quoteVolume > $10M (active trading)
     """
     cfg = config or DEFAULT_CONFIG
+    # NOTE: `symbols` is already filtered from fapi/v1/exchangeInfo (USDS-M perpetual
+    # whitelist, status=TRADING). Every symbol here is a real listed contract.
+    # The token_data dict comes from query-token-info (Web3 search).
+    # We only use token_data when the symbol is an EXACT match to prevent
+    # cross-contamination from similarly-named tokens in the Web3 ecosystem.
     candidates = []
     for sym in symbols:
         snap = snapshots.get(sym.symbol)
@@ -786,12 +789,17 @@ def screen_high_volatility(
         if snap.last_price <= 0:
             continue
 
+        # Double-check: token_data symbol must exactly match base_asset
+        # (fetch_token_market_data already enforces this, but be explicit)
+        if tdata and tdata.symbol.upper() != sym.base_asset.upper():
+            tdata = None
+
         # Market cap filter (using config thresholds)
         mcap = 0.0
         if tdata and tdata.market_cap > 0:
             mcap = tdata.market_cap
         else:
-            continue  # No market cap data → skip
+            continue  # No exact-match market cap data → skip (safe default)
 
         if not (cfg.mcap_min <= mcap <= cfg.mcap_max):
             continue
@@ -1310,8 +1318,8 @@ Examples:
   # Run full dual-category scan with defaults
   python3 grid_hunter_v5.py
 
-  # Category A only: recent contracts ≤60 days, leverage 3x
-  python3 grid_hunter_v5.py --mode cat-a --contract-recent-days 60 --leverage 3
+  # Category A only: recent contracts ≤90 days (default), stop-loss 8%
+  python3 grid_hunter_v5.py --mode cat-a --stop-loss-pct 8.0
 
   # Category B only: market cap $500M-$2B, turnover ≥30%
   python3 grid_hunter_v5.py --mode cat-b --mcap-min 500000000 --mcap-max 2000000000 --turnover-min 0.30

@@ -4,7 +4,7 @@ description: |
   v2.2 USDS-M 永续合约网格猎手。双分类筛选（次新币横盘 + 高波动套利）→ 历史回测 → Geometric 等比中性网格。
   此 Skill 必须通过执行 Python 脚本来获取实时数据和计算网格参数，严禁 AI 自行伪造或猜测任何数据。
 metadata:
-  version: 2.2.0
+  version: 2.2.1
   author: joensmoon
   openclaw:
     requires:
@@ -65,8 +65,10 @@ python3 /path/to/skills/crayfish-grid-hunter/grid_hunter_v5.py --mode cat-b --no
 
 | 用户说的话 | 对应 CLI 参数 |
 | :--- | :--- |
-| "合约上线天数改为60天" | `--contract-recent-days 60` |
-| "杠杆3倍" | `--leverage 3` |
+| "合约上线天数改为120天" | `--contract-recent-days 120` |
+| "次新币天数改为60天" | `--contract-recent-days 60` |
+| "杠杆5倍" | `--leverage 5` |
+| "杠杆改为10倍" | `--leverage 10` |
 | "市值范围5亿到20亿" | `--mcap-min 500000000 --mcap-max 2000000000` |
 | "换手率30%以上" | `--turnover-min 0.30` |
 | "止损3%" | `--stop-loss-pct 3.0` |
@@ -98,6 +100,12 @@ python3 /path/to/skills/crayfish-grid-hunter/grid_hunter_v5.py --mode cat-b --no
 - **历史回测系统**：30 天 1h K线回测，输出 ROI、夏普比率、最大回撤
 - **等比中性网格**：自动计算精确区间，强制执行 ≥0.8% 单格利润
 - **参数优化建议**：基于市场状态（横盘/趋势/高波动）自动建议参数调整
+
+### 次新币定义
+
+> **次新币 = 在币安 USDS-M 永续合约市场上线不超过 90 天的合约。**
+
+这是本工具的核心筛选条件，默认值为 `--contract-recent-days 90`，不需要额外指定。所有候选均来自币安官方 `fapi/v1/exchangeInfo` 接口返回的合约白名单（status=TRADING，contractType=PERPETUAL），**不包含任何未在币安合约市场上线的代币**。
 
 ## 触发词 (Trigger Keywords)
 

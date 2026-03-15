@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.1] — 2026-03-15
+
+### 关键修复
+- **[BUG] 移除 query-token-info 不安全 fallback**：搜索无精确匹配时不再取 `tokens[0]`，彻底杜绝非合约代币混入筛选池（如搜索 "ACE" 返回 "ACEME" 数据）
+- **[BUG] screen_high_volatility 二次验证**：增加 `token_data.symbol` 与 `base_asset` 的精确匹配校验
+- **[DOC] 次新币定义统一为 90 天**：README、SKILL.md、EXAMPLES.md、CONFIGURATION.md 全部统一
+- **[DOC] 移除所有“杠杆3倍/60天”限制性示例**：改为中性的止损/市值范围示例，不对杠杆做限制性推荐
+
+### 测试
+- 新增 3 个 token 验证专项测试（精确匹配、无匹配返回 None、$前缀处理）
+- 总计 165/165 通过
+
 ## [2.2.0] — 2026-03-15
 
 ### 关键修复 (Critical Fixes)
