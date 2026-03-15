@@ -116,3 +116,4 @@ Grid Hunter monitors active grid positions for potential breakout conditions usi
 | Price change | \|24h change\| > 5% | HIGH |
 | Combined (price + volume) | Both conditions met | CRITICAL |
 
+

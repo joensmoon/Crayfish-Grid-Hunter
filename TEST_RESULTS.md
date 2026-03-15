@@ -91,3 +91,4 @@ All 5 grid calculations verified:
 - All prices in range (lower < price < upper) ✅  
 - All profit_per_grid ≥ 0.8% (MIN_GRID_PROFIT) ✅
 - All stop_loss < lower ✅
+

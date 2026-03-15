@@ -456,3 +456,4 @@ def format_scan_results_table(cat_a_results: List[Dict], cat_b_results: List[Dic
 
     return "\n".join(lines)
 
+

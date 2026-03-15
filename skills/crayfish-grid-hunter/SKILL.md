@@ -145,3 +145,4 @@ pip3 install requests tabulate
 npx skills add binance/derivatives-trading-usds-futures -a openclaw -y
 npx skills add binance-web3/query-token-info -a openclaw -y
 ```
+

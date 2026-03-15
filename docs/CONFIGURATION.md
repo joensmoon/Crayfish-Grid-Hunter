@@ -85,3 +85,4 @@ Crayfish Grid Hunter 的核心引擎 `grid_hunter_v5.py` 中定义了一个 `Use
 | "单格利润最低 1.5%" | `--min-grid-profit 0.015` |
 | "扫描前 100 个币种" | `--max-symbols 100` |
 | "年化波动率最低 20%" | `--rv-min 20` |
+

@@ -50,3 +50,4 @@ Crayfish 内置了 `MIN_GRID_PROFIT = 0.8%` 的硬性要求。
 
 > **注意**：当前 v1.0.0 版本尚未实现此功能。当前版本仅依赖 `derivatives-trading-usds-futures` 和 `query-token-info` 两个官方 Skills。
 
+

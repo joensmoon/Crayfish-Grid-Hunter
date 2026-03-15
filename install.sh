@@ -59,3 +59,4 @@ echo "     • query-token-info (币安 Web3 市值数据)"
 echo ""
 echo "  📖 详细文档: docs/QUICK_START.md | USER_GUIDE.md"
 echo "================================================================"
+

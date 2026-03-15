@@ -122,3 +122,4 @@ The following APIs are planned for future integration but are **not used in the 
 *   **Skill**: `assets` (binance)
 *   **Purpose**: Check BNB burn status and optimize trading fees
 *   **Status**: Planned for future release
+
