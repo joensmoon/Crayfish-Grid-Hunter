@@ -15,7 +15,7 @@ GET  /monitor/status      — Get current monitor status
 POST /webhook/test        — Test webhook connectivity
 
 Author: joensmoon
-Version: 2.0.0
+Version: 1.0.0
 """
 
 from __future__ import annotations
@@ -153,9 +153,9 @@ def create_api_app():
         description=(
             "USDS-M 永续合约网格猎手 REST API。\n"
             "提供双分类筛选、历史回测和实时监控的程序化访问接口。\n"
-            "Author: joensmoon | Version: 2.0.0"
+            "Author: joensmoon | Version: 1.0.0"
         ),
-        version="2.0.0",
+        version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
     )
@@ -210,7 +210,7 @@ def create_api_app():
         return {
             "status": "ok",
             "service": "crayfish-grid-hunter",
-            "version": "2.0.0",
+            "version": "1.0.0",
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 

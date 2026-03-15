@@ -1,13 +1,13 @@
 ---
 name: crayfish-grid-hunter
 description: 币安 USDS-M 合约网格猎手。双分类筛选（次新币横盘+高波动套利）→ 等比中性网格。所有数据来自币安官方 API 实时获取，严禁 AI 自行生成任何数值。触发词：次新币网格、高波动套利、网格猎手。
-version: 2.3.1
+version: 1.0.0
 author: joensmoon
 homepage: https://github.com/joensmoon/Crayfish-Grid-Hunter
 metadata: {"openclaw":{"emoji":"🦞","requires":{"bins":["python3"]},"install":[{"id":"pip-deps","kind":"download","url":"https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/install.sh","label":"Install Python dependencies (requests, tabulate)"}]}}
 ---
 
-# Crayfish Grid Hunter v2.3.1
+# Crayfish Grid Hunter v1.0.0
 
 币安 USDS-M 永续合约智能网格交易助手。
 

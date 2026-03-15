@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.3.1] — 2026-03-16
+## [1.0.0] — 2026-03-16
 
 ### 新增功能
 
@@ -18,12 +18,12 @@
 - `screen_recent_contracts()` 新增 `token_data` 参数，市値信息写入 `category_reason`
 
 ### 测试
-- 175/175 通过（原有 72 + v2.0 新增 90 + v2.3.1 新增 13）
+- 175/175 通过（原有 72 + v1.0.00 新增 90 + v1.0.0 新增 13）
 - 新增 `enrich_snapshot_48h`、48h 过滤、Cat A 市値过滤、CLI 参数 4 组专项测试
 
 ---
 
-## [2.3.0] — 2026-03-15
+## [1.0.0] — 2026-03-15
 
 ### 严重问题修复
 
@@ -38,7 +38,7 @@
 - **验证方法**：真实脚本输出必含 `CRAYFISH-` 签名。若用户看到的结果没有此签名，说明 AI 没有执行脚本，结果无效
 - AI 无法伪造此签名（签名基于执行时间+版本号+结果数量的 MD5 哈希）
 
-### SKILL.md 强化（v2.3）
+### SKILL.md 强化（v1.0.03）
 - 重写为更强制性的执行规则格式（参考 OpenClaw 官方规范）
 - 新增签名验证说明，用户可自行验证输出真实性
 - 禁止事项加入"违反将导致用户损失真实资金"警告
@@ -46,10 +46,10 @@
 - 高波动套利章节明确"严格精确匹配，无 fallback"
 
 ### 测试
-- 162/162 通过（原有 72 + v2.0 新增 90）
+- 162/162 通过（原有 72 + v1.0.00 新增 90）
 - 新增签名机制专项验证
 
-## [2.2.2] — 2026-03-15
+## [1.0.0] — 2026-03-15
 
 ### OpenClaw 兼容性修复
 - **[SKILL.md] frontmatter 格式符合 OpenClaw 规范**：
@@ -68,7 +68,7 @@
 - 新增 SKILL.md 格式合规性自动检查（8 项）
 - 总计 165/165 通过
 
-## [2.2.1] — 2026-03-15
+## [1.0.0] — 2026-03-15
 
 ### 关键修复
 - **[BUG] 移除 query-token-info 不安全 fallback**：搜索无精确匹配时不再取 `tokens[0]`，彻底杜绝非合约代币混入筛选池（如搜索 "ACE" 返回 "ACEME" 数据）
@@ -80,7 +80,7 @@
 - 新增 3 个 token 验证专项测试（精确匹配、无匹配返回 None、$前缀处理）
 - 总计 165/165 通过
 
-## [2.2.0] — 2026-03-15
+## [1.0.0] — 2026-03-15
 
 ### 关键修复 (Critical Fixes)
 - **[SKILL.md] 彻底重写 Agent Behavior 指令**：新增 5 条强制规则，明确禁止 AI 自行生成数据，必须通过执行脚本获取真实数据
@@ -96,9 +96,9 @@
 ### 文档更新
 - SKILL.md 新增自然语言 → CLI 参数对照表
 - SKILL.md 明确列出 5 类禁止输出内容（跨交易所套利、三角套利等）
-- README.md 同步更新 v2.2.0 说明
+- README.md 同步更新 v1.0.0 说明
 
-## [2.1.0] — 2026-03-15
+## [1.0.0] — 2026-03-15
 
 ### Bug Fixes (Critical)
 - **BUG-2 FIXED**: Grid range upper bound could be below current price — strategy would be unexecutable.
@@ -108,7 +108,7 @@
   Added `_volume_shrinkage_ratio` override attribute for testing.
 - **BUG-3 FIXED**: Minimum profit enforcement (`MIN_GRID_PROFIT=0.8%`) failed silently when range was too narrow.
   Now auto-expands grid range when reducing grid count is insufficient.
-- **BUG-4 FIXED**: `VERSION` constant was `"1.0.0"` instead of `"2.1.0"`.
+- **BUG-4 FIXED**: `VERSION` constant was `"1.0.0"` instead of `"1.0.0"`.
 
 ### Bug Fixes (Medium)
 - **BUG-5/11 FIXED**: Category A summary table now correctly shows contract age (days), ATR%, BB%, ADX, Score
@@ -133,9 +133,9 @@
 ### Test Updates
 - Updated `test_grid_hunter.py` `make_tech_sideways` to use last-two-candle shrinkage pattern
   (aligns with new `volume_shrinkage_ratio` calculation using `volumes[-2]`)
-- All 162 tests pass (72 original + 90 v2.0 feature tests)
+- All 162 tests pass (72 original + 90 v1.0.00 feature tests)
 
-## [2.0.0] — 2026-03-15
+## [1.0.0] — 2026-03-15
 
 ### 新增
 - **`progress.py`**: 进度条模块，包含 `ProgressBar`、`StepProgress`、`format_table`、`format_error`、`format_warning`、`format_success`
@@ -151,10 +151,10 @@
 - **`grid_hunter_v5.py`**: `run_dual_category_scan()` 新增实时进度条显示、每步状态反馈、友好错误信息
 - **`grid_hunter_v5.py`**: `format_scan_output()` 升级为表格化结果展示 + 参数优化建议集成
 - **`backtester.py`**: `format_report()` 新增综合评定（优秀/良好/一般/亏损）、中文化输出、止损触发建议
-- **`SKILL.md`**: 升级到 v2.0.0，新增安装说明、模块列表
+- **`SKILL.md`**: 升级到 v1.0.0，新增安装说明、模块列表
 
 ### 测试
-- 新增 `test_v2_features.py`: 90 个测试用例覆盖所有 v2.0 新功能
+- 新增 `test_v2_features.py`: 90 个测试用例覆盖所有 v1.0.00 新功能
 - 全部 162 个测试 (72 个原有 + 90 个新增) 全部通过
 
 ## [1.0.0] - 2026-03-15

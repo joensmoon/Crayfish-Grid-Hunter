@@ -5,7 +5,7 @@ Provides progress bars, rich table formatting, and user-friendly
 error messages for the OpenClaw agent environment.
 
 Author: joensmoon
-Version: 2.0.0
+Version: 1.0.0
 """
 
 from __future__ import annotations

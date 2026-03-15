@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "2.3.1"
+VERSION = "1.0.0"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"
@@ -1268,7 +1268,7 @@ def format_scan_output(
     Format the dual-category scan results for user display.
     Includes rich tables, grid strategy details, and parameter suggestions.
 
-    v2.1 improvements:
+    v1.0.01 improvements:
     - Category A table now shows contract age, ATR, BB width, ADX (not volatility)
     - Category B table highlights negative funding rate opportunities
     - param_advisor receives avg_adx for accurate regime detection
@@ -1405,7 +1405,7 @@ def _build_arg_parser():
     import argparse
     p = argparse.ArgumentParser(
         prog="grid_hunter_v5",
-        description="Crayfish Grid Hunter v2.2 — USDS-M Futures Grid Scanner",
+        description="Crayfish Grid Hunter v1.0.02 — USDS-M Futures Grid Scanner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

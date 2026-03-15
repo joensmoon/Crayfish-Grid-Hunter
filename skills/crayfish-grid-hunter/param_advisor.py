@@ -5,7 +5,7 @@ Analyzes scan results and market conditions to provide
 data-driven parameter optimization suggestions.
 
 Author: joensmoon
-Version: 2.0.0
+Version: 1.0.0
 """
 
 from __future__ import annotations
