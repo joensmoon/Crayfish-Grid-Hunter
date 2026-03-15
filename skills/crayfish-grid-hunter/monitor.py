@@ -633,7 +633,7 @@ class GridPerformanceMonitor:
 
         return {
             "generated_at": datetime.now().isoformat(),
-            "version": "5.3.0",
+            "version": "1.0.0",
             "summary": {
                 "active_positions": len(self.positions),
                 "total_alerts_generated": len(self.alert_history),
