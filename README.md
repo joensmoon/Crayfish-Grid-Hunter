@@ -46,6 +46,19 @@ curl -s https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/in
 
 ---
 
+## 📚 完整文档体系
+
+为了帮助不同阶段的用户快速上手，我们提供了完整的文档体系：
+
+*   [**用户使用手册 (USER_GUIDE.md)**](USER_GUIDE.md): 从安装到结果解读，最详尽的用户指南。
+*   [**快速开始 (QUICK_START.md)**](docs/QUICK_START.md): 5分钟快速开始指南。
+*   [**示例 (EXAMPLES.md)**](docs/EXAMPLES.md): 丰富的自然语言触发示例。
+*   [**配置 (CONFIGURATION.md)**](docs/CONFIGURATION.md): 详细的参数配置说明。
+*   [**高级指南 (ADVANCED.md)**](docs/ADVANCED.md): API 接口、Webhook 和回测集成的高级指南。
+*   [**故障排除 (TROUBLESHOOTING.md)**](TROUBLESHOOTING.md): 常见问题与故障排除指南。
+
+---
+
 ## 📂 项目结构
 
 ```text
@@ -57,8 +70,9 @@ Crayfish-Grid-Hunter/
 │   ├── progress.py         # 实时进度条与输出增强
 │   ├── param_advisor.py    # 参数优化建议引擎
 │   └── api_server.py       # REST API 与 Webhook 支持
-├── docs/                   # 完整文档体系 (快速开始、示例、配置、高级)
+├── docs/                   # 完整文档体系
 ├── install.sh              # 一键安装脚本
+├── USER_GUIDE.md           # 用户使用手册
 └── README.md               # 项目主页
 ```
 
