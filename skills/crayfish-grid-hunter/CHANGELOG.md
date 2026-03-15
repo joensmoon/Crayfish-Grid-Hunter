@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.1.0] — 2026-03-15
+
+### Bug Fixes (Critical)
+- **BUG-2 FIXED**: Grid range upper bound could be below current price — strategy would be unexecutable.
+  Now enforces `lower < current_price < upper` with final safety clamps.
+- **BUG-1 FIXED**: `volume_shrinkage_ratio` used `volumes[-1]` (potentially incomplete candle) as current day.
+  Now uses `volumes[-2]` (most recent complete day) vs prior 7-day average.
+  Added `_volume_shrinkage_ratio` override attribute for testing.
+- **BUG-3 FIXED**: Minimum profit enforcement (`MIN_GRID_PROFIT=0.8%`) failed silently when range was too narrow.
+  Now auto-expands grid range when reducing grid count is insufficient.
+- **BUG-4 FIXED**: `VERSION` constant was `"1.0.0"` instead of `"2.1.0"`.
+
+### Bug Fixes (Medium)
+- **BUG-5/11 FIXED**: Category A summary table now correctly shows contract age (days), ATR%, BB%, ADX, Score
+  instead of incorrectly filling the `Age` column with 24h volatility.
+- **BUG-7 FIXED**: `format_scan_output` now passes `avg_adx` to `ParameterAdvisor.analyze()`,
+  enabling accurate market regime detection (was always showing "横盘震荡").
+- **BUG-9 FIXED**: Negative funding rate symbols now highlighted with 💰 in both Category A and B tables.
+  Category B table adds legend explaining the 💰 indicator.
+
+### Logic Improvements
+- **Sideways filter hardened**: ADX is now a hard gate (ADX ≥ threshold → exclude, regardless of ATR/BB).
+  Previously, low ATR could override high ADX, allowing trending symbols through Category A.
+  New logic: `adx_ok AND (atr_low OR bb_narrow)` instead of `atr_low OR bb_narrow OR adx_low`.
+
+### Display Enhancements
+- `to_display()` now shows price-in-range validation: `[✅ 在区间内]` or `[⚠️ 在区间外！]`
+- Grid range now shows width percentage: `(宽度 9.0%)`
+- Grid count now shows recommendation hint: `10 格 (低波动建议20格)`
+- Liquidation price now labeled as estimate: `（估算值，以交易所显示为准）`
+- Category B table adds `RV%` column (realized volatility), replacing duplicate `Vol%` column
+
+### Test Updates
+- Updated `test_grid_hunter.py` `make_tech_sideways` to use last-two-candle shrinkage pattern
+  (aligns with new `volume_shrinkage_ratio` calculation using `volumes[-2]`)
+- All 162 tests pass (72 original + 90 v2.0 feature tests)
+
 ## [2.0.0] — 2026-03-15
 
 ### 新增

@@ -96,7 +96,10 @@ def make_tech_sideways(symbol, closes=None, volumes=None):
     highs = [c + random.uniform(0.2, 0.8) for c in closes]
     lows = [c - random.uniform(0.2, 0.8) for c in closes]
     if volumes is None:
-        volumes = [1000000 + random.uniform(-50000, 50000) for _ in range(29)] + [300000]
+        # Last TWO candles are low volume (shrinkage):
+        # volumes[-2] = current complete day (used by new volume_shrinkage_ratio)
+        # volumes[-1] = today's incomplete candle (excluded from calculation)
+        volumes = [1000000 + random.uniform(-50000, 50000) for _ in range(28)] + [300000, 300000]
     return TechnicalAnalysis(symbol, closes, highs, lows, volumes)
 
 

@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "1.0.0"
+VERSION = "2.1.0"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"
@@ -334,18 +334,27 @@ class TechnicalAnalysis:
     @property
     def volume_shrinkage_ratio(self) -> float:
         """Current 24h volume vs 7-day average volume.
+
         A ratio < 0.5 means volume has shrunk to below 50% of the 7-day average.
+        Uses the most recent complete day vs the prior 7-day average.
+        Excludes the last candle (may be incomplete) when computing the baseline.
         """
-        if not self.volumes or len(self.volumes) < 2:
+        # Allow manual override for testing
+        if hasattr(self, '_volume_shrinkage_ratio'):
+            return self._volume_shrinkage_ratio
+        if not self.volumes or len(self.volumes) < 3:
             return 1.0
-        # Last element = current 24h volume, previous 7 = 7-day average
-        if len(self.volumes) >= 8:
-            avg_7d = sum(self.volumes[-8:-1]) / 7
+        # Use the second-to-last candle as "current day" to avoid incomplete candle
+        # Use candles [-9:-2] (7 days) as the baseline average
+        current_vol = self.volumes[-2]  # Most recent complete day
+        if len(self.volumes) >= 9:
+            baseline = self.volumes[-9:-2]  # 7 complete days before current
         else:
-            avg_7d = sum(self.volumes[:-1]) / max(len(self.volumes) - 1, 1)
+            baseline = self.volumes[:-2]    # All available days before current
+        avg_7d = sum(baseline) / len(baseline) if baseline else 0
         if avg_7d <= 0:
             return 1.0
-        return self.volumes[-1] / avg_7d
+        return current_vol / avg_7d
 
 
 @dataclass
@@ -405,20 +414,36 @@ class GridParameters:
         if self.market_cap > 0:
             mcap_line = f"\n  市值           : ${self.market_cap/1e6:.0f}M  换手率: {self.turnover_rate_pct:.1f}%"
 
+        # Price-in-range validation
+        price_in_range = self.lower_price < self.current_price < self.upper_price
+        range_status = "✅ 在区间内" if price_in_range else "⚠️ 在区间外！"
+        range_pct = (self.upper_price - self.lower_price) / self.current_price * 100
+
+        # Grid count recommendation hint
+        vol = self.volatility_24h_pct
+        if vol >= 25:
+            grid_hint = "高波动建议50格"
+        elif vol >= 15:
+            grid_hint = "中高波动建议40格"
+        elif vol >= 8:
+            grid_hint = "中波动建议30格"
+        else:
+            grid_hint = "低波动建议20格"
+
         return (
-            f"\n{'='*58}"
+            f"\n{'='*62}"
             f"\n  针对 {self.symbol}："
-            f"\n{'='*58}"
+            f"\n{'='*62}"
             f"\n  策略类型       : 合约中性网格（{self.strategy_type}）"
             f"\n  网格类型       : {self.grid_type} 等比"
-            f"\n  当前价格       : ${self.current_price:.4f}"
-            f"\n  网格区间       : ${self.lower_price:.4f} — ${self.upper_price:.4f}"
-            f"\n  网格数量       : {self.grid_count} grids"
+            f"\n  当前价格       : ${self.current_price:.4f}  [{range_status}]"
+            f"\n  网格区间       : ${self.lower_price:.4f} — ${self.upper_price:.4f}  (宽度 {range_pct:.1f}%)"
+            f"\n  网格数量       : {self.grid_count} 格  ({grid_hint})"
             f"\n  网格比率(r)    : {self.grid_ratio:.6f}"
             f"\n  单格利润率     : {self.profit_per_grid_pct:.2f}%（扣 {MAKER_FEE*100:.2f}% 手续费后）"
             f"\n  杠杆倍数       : {self.leverage}×"
             f"\n  5%硬止损位     : ${self.stop_loss_price:.4f}（下轨下方5%）"
-            f"\n  强平价估算     : ${self.liquidation_price:.4f}"
+            f"\n  强平价估算     : ${self.liquidation_price:.4f}（估算值，以交易所显示为准）"
             f"\n  24h波动率      : {self.volatility_24h_pct:.2f}%"
             f"\n  支撑 / 压力    : ${self.support:.4f} / ${self.resistance:.4f}"
             f"{mcap_line}"
@@ -695,12 +720,15 @@ def screen_recent_contracts(
         vol_ratio = tech.volume_shrinkage_ratio
         has_volume_shrinkage = vol_ratio < cfg.volume_shrink_ratio
 
-        # Sideways check: at least one indicator must confirm (using config thresholds)
-        is_sideways = (
+        # Sideways check:
+        # ADX is the primary trend filter — if ADX >= threshold, it's trending, exclude.
+        # ATR and BB width are secondary confirmations (at least one must show low volatility).
+        adx_ok = tech.adx_14 < cfg.adx_sideways
+        low_vol_confirmed = (
             tech.atr_14_pct < cfg.atr_sideways_pct or
-            tech.bb_width_pct < cfg.bb_width_sideways or
-            tech.adx_14 < cfg.adx_sideways
+            tech.bb_width_pct < cfg.bb_width_sideways
         )
+        is_sideways = adx_ok and low_vol_confirmed
 
         if not (has_volume_shrinkage and is_sideways):
             continue
@@ -834,12 +862,25 @@ def calculate_geometric_grid(
     support = tech.support_level if tech.support_level > 0 else price * 0.90
     resistance = tech.resistance_level if tech.resistance_level > 0 else price * 1.10
 
-    lower = max(bb_lower, support, price - 3 * atr_abs)
-    upper = min(bb_upper, resistance, price + 3 * atr_abs)
+    # Lower bound: take the highest of BB lower, support, and price-3ATR
+    # but must not exceed current price
+    lower = min(max(bb_lower, support, price - 3 * atr_abs), price * 0.99)
 
+    # Upper bound: take the lowest of BB upper, resistance, and price+3ATR
+    # but must not be below current price
+    upper = max(min(bb_upper, resistance, price + 3 * atr_abs), price * 1.01)
+
+    # Ensure minimum range of 5% centered around current price
     if (upper - lower) / price < 0.05:
-        lower = price * 0.95
-        upper = price * 1.05
+        half = price * 0.025
+        lower = price - half
+        upper = price + half
+
+    # Final safety: ensure lower < price < upper
+    if lower >= price:
+        lower = price * 0.97
+    if upper <= price:
+        upper = price * 1.03
 
     # Grid Count based on volatility
     vol = snap.volatility_24h_pct
@@ -858,11 +899,25 @@ def calculate_geometric_grid(
     net_profit = gross_profit - 2 * MAKER_FEE
 
     # Minimum profit enforcement
+    # If the range is too narrow to achieve MIN_GRID_PROFIT even with min grids,
+    # expand the range symmetrically around the current price.
     if net_profit < MIN_GRID_PROFIT:
         min_ratio = 1 + MIN_GRID_PROFIT + 2 * MAKER_FEE
         grid_count = max(10, int(math.log(upper / lower) / math.log(min_ratio)))
         ratio = (upper / lower) ** (1 / grid_count)
         net_profit = ratio - 1 - 2 * MAKER_FEE
+
+        # If still below minimum after reducing grid count, expand range
+        if net_profit < MIN_GRID_PROFIT:
+            # Calculate minimum range needed for MIN_GRID_PROFIT with 10 grids
+            # min_range = min_ratio^10 - 1
+            min_range_ratio = min_ratio ** 10  # upper/lower ratio needed
+            half_range = (math.sqrt(min_range_ratio) - 1) * price
+            lower = price - half_range
+            upper = price + half_range
+            grid_count = 10
+            ratio = (upper / lower) ** (1 / grid_count)
+            net_profit = ratio - 1 - 2 * MAKER_FEE
 
     # Risk
     stop_loss = lower * 0.95
@@ -1114,7 +1169,14 @@ def format_scan_output(
     """
     Format the dual-category scan results for user display.
     Includes rich tables, grid strategy details, and parameter suggestions.
+
+    v2.1 improvements:
+    - Category A table now shows contract age, ATR, BB width, ADX (not volatility)
+    - Category B table highlights negative funding rate opportunities
+    - param_advisor receives avg_adx for accurate regime detection
+    - No duplicate grid detail output
     """
+    import re as _re
     try:
         from param_advisor import ParameterAdvisor, detect_market_regime
         _has_advisor = True
@@ -1123,55 +1185,78 @@ def format_scan_output(
 
     lines = [
         f"\n{'='*70}",
-        f"  🦦 CRAYFISH GRID HUNTER v{VERSION}",
-        f"  USDS-M 永续合约 — 双分类筛选结果",
+        f"  \U0001f9a6 CRAYFISH GRID HUNTER v{VERSION}",
+        f"  USDS-M \u6c38\u7eed\u5408\u7ea6 \u2014 \u53cc\u5206\u7c7b\u7b5b\u9009\u7ed3\u679c",
         f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"{'='*70}",
     ]
 
     # --- Category A Summary Table ---
-    lines.append(f"\n📋 Category A — 次新币横盘类")
+    lines.append(f"\n\U0001f4cb Category A \u2014 \u6b21\u65b0\u5e01\u6a2a\u76d8\u7c7b")
     if cat_a:
-        # Header
-        lines.append(f"  {'#':<4} {'Symbol':<12} {'Price':>10} {'Age':>8} {'ATR%':>7} {'BB%':>7} {'Score':>8}")
-        lines.append(f"  {'-'*4} {'-'*12} {'-'*10} {'-'*8} {'-'*7} {'-'*7} {'-'*8}")
+        # Header: Age(d), ATR%, BB%, ADX, Score
+        lines.append(f"  {'#':<3} {'Symbol':<14} {'Price':>10} {'Age':>6} {'ATR%':>6} {'BB%':>6} {'ADX':>5} {'Score':>8}")
+        lines.append(f"  {'-'*3} {'-'*14} {'-'*10} {'-'*6} {'-'*6} {'-'*6} {'-'*5} {'-'*8}")
         for i, gp in enumerate(cat_a, 1):
+            # Parse age, BB width, ADX from category_reason
+            age_m = _re.search(r'\u5408\u7ea6\u4e0a\u7ebf(\d+)\u5929', gp.category_reason)
+            bb_m  = _re.search(r'BB\u5bbd=([\d.]+)%', gp.category_reason)
+            adx_m = _re.search(r'ADX=([\d.]+)', gp.category_reason)
+            age_str = f"{age_m.group(1)}d" if age_m else "?d"
+            bb_str  = bb_m.group(1) if bb_m else "?"
+            adx_str = adx_m.group(1) if adx_m else "?"
+            # Funding highlight for negative rate
+            funding_flag = " \U0001f4b0" if gp.funding_rate < 0 else ""
             lines.append(
-                f"  #{i:<3} {gp.symbol:<12} "
+                f"  #{i:<2} {gp.symbol:<14} "
                 f"${gp.current_price:>9.4f} "
-                f"{gp.volatility_24h_pct:>6.1f}%  "
-                f"{gp.atr_pct:>5.2f}%  "
-                f"{gp.volatility_24h_pct:>5.1f}%  "
-                f"{gp.grid_score:>6.0f}/100"
+                f"{age_str:>6} "
+                f"{gp.atr_pct:>5.2f}% "
+                f"{bb_str:>5}% "
+                f"{adx_str:>5}  "
+                f"{gp.grid_score:>5.0f}/100"
+                f"{funding_flag}"
             )
-            lines.append(f"       └→ {gp.category_reason}")
+            lines.append(f"       \u2514\u2192 {gp.category_reason}")
     else:
-        lines.append("  ⚠️  暂无符合条件的次新币横盘标的。")
-        lines.append("  💡 建议: 尝试输入 '次新币网格，合约上线天数改为120天' 来放宽筛选条件。")
+        lines.append("  \u26a0\ufe0f  \u6682\u65e0\u7b26\u5408\u6761\u4ef6\u7684\u6b21\u65b0\u5e01\u6a2a\u76d8\u6807\u7684\u3002")
+        lines.append("  \U0001f4a1 \u5efa\u8bae: \u5c1d\u8bd5\u8f93\u5165 '\u6b21\u65b0\u5e01\u7f51\u683c\uff0c\u5408\u7ea6\u4e0a\u7ebf\u5929\u6570\u6539\u4e3a120\u5929' \u6765\u653e\u5bbd\u7b5b\u9009\u6761\u4ef6\u3002"
+        )
 
     # --- Category B Summary Table ---
-    lines.append(f"\n📋 Category B — 高波动套利类")
+    lines.append(f"\n\U0001f4cb Category B \u2014 \u9ad8\u6ce2\u52a8\u5957\u5229\u7c7b")
     if cat_b:
-        lines.append(f"  {'#':<4} {'Symbol':<12} {'Price':>10} {'Mcap':>8} {'Turn%':>7} {'Vol%':>7} {'Score':>8}")
-        lines.append(f"  {'-'*4} {'-'*12} {'-'*10} {'-'*8} {'-'*7} {'-'*7} {'-'*8}")
+        lines.append(f"  {'#':<3} {'Symbol':<14} {'Price':>10} {'Mcap':>8} {'Turn%':>7} {'RV%':>7} {'Vol24h':>7} {'Score':>8}")
+        lines.append(f"  {'-'*3} {'-'*14} {'-'*10} {'-'*8} {'-'*7} {'-'*7} {'-'*7} {'-'*8}")
         for i, gp in enumerate(cat_b, 1):
             mcap_str = f"${gp.market_cap/1e6:.0f}M" if gp.market_cap > 0 else "N/A"
+            # Parse RV from reason
+            rv_m = _re.search(r'RV=([\d.]+)%', gp.category_reason)
+            rv_str = rv_m.group(1) if rv_m else "?"
+            # Negative funding highlight
+            funding_flag = " \U0001f4b0" if gp.funding_rate < 0 else ""
             lines.append(
-                f"  #{i:<3} {gp.symbol:<12} "
+                f"  #{i:<2} {gp.symbol:<14} "
                 f"${gp.current_price:>9.4f} "
                 f"{mcap_str:>8} "
                 f"{gp.turnover_rate_pct:>5.0f}%  "
+                f"{rv_str:>5}%  "
                 f"{gp.volatility_24h_pct:>5.1f}%  "
-                f"{gp.grid_score:>6.0f}/100"
+                f"{gp.grid_score:>5.0f}/100"
+                f"{funding_flag}"
             )
-            lines.append(f"       └→ {gp.category_reason}")
+            lines.append(f"       \u2514\u2192 {gp.category_reason}")
+        # Funding legend
+        if any(gp.funding_rate < 0 for gp in cat_b):
+            lines.append(f"  \U0001f4b0 = \u8d1f\u8d44\u91d1\u8d39\u7387\uff0c\u591a\u5934\u7f51\u683c\u6bcf\u65e5\u989d\u5916\u6536\u76ca")
     else:
-        lines.append("  ⚠️  暂无符合条件的高波动套利标的。")
-        lines.append("  💡 建议: 尝试输入 '高波动套利，市値范围放宽到亿到50亿，换手率降低到30%' 来放宽筛选。")
+        lines.append("  \u26a0\ufe0f  \u6682\u65e0\u7b26\u5408\u6761\u4ef6\u7684\u9ad8\u6ce2\u52a8\u5957\u5229\u6807\u7684\u3002")
+        lines.append("  \U0001f4a1 \u5efa\u8bae: \u5c1d\u8bd5\u8f93\u5165 '\u9ad8\u6ce2\u52a8\u5957\u5229\uff0c\u5e02\u5024\u8303\u56f4\u653e\u5bbd\u5230\u4ebf\u523050\u4ebf\uff0c\u6362\u624b\u7387\u964d\u4f4e\u523030%' \u6765\u653e\u5bbd\u7b5b\u9009\u3002"
+        )
 
     # --- Grid Strategy Details ---
     lines.append(f"\n{'='*70}")
-    lines.append(f"  📊 等比网格策略详情")
+    lines.append(f"  \U0001f4ca \u7b49\u6bd4\u7f51\u683c\u7b56\u7565\u8be6\u60c5")
     lines.append(f"{'='*70}")
 
     for gp in cat_a + cat_b:
@@ -1181,21 +1266,29 @@ def format_scan_output(
     if _has_advisor:
         all_vols = [gp.volatility_24h_pct for gp in cat_a + cat_b]
         avg_vol = sum(all_vols) / len(all_vols) if all_vols else 0.0
+        # Estimate avg_adx from category_reason strings
+        adx_vals = []
+        for gp in cat_a + cat_b:
+            m = _re.search(r'ADX=([\d.]+)', gp.category_reason)
+            if m:
+                adx_vals.append(float(m.group(1)))
+        avg_adx = sum(adx_vals) / len(adx_vals) if adx_vals else 20.0
         advisor = ParameterAdvisor()
         suggestions = advisor.analyze(
             cat_a_count=len(cat_a),
             cat_b_count=len(cat_b),
             avg_vol=avg_vol,
+            avg_adx=avg_adx,
             config=config,
         )
-        regime = detect_market_regime(avg_vol, 20.0)
+        regime = detect_market_regime(avg_vol, avg_adx)
         lines.append(advisor.format_report(
             suggestions, regime=regime,
             cat_a_count=len(cat_a), cat_b_count=len(cat_b)
         ))
 
     lines.append(f"\n{'='*70}")
-    lines.append(f"  如需进一步帮助，请参阅 docs/ADVANCED.md 或在 GitHub 提交 Issue。")
+    lines.append(f"  \u5982\u9700\u8fdb\u4e00\u6b65\u5e2e\u52a9\uff0c\u8bf7\u53c2\u9605 docs/ADVANCED.md \u6216\u5728 GitHub \u63d0\u4ea4 Issue\u3002")
     lines.append(f"{'='*70}\n")
 
     return "\n".join(lines)

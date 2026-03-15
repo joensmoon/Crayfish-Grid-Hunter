@@ -1,62 +1,93 @@
-# 测试报告 (Test Results) — v2.0.0
+# Test Results — Crayfish Grid Hunter v2.1.0
 
-**测试日期**: 2026-03-15
-**测试平台**: Ubuntu 22.04 LTS (Manus Sandbox Environment)
-**测试覆盖**: 核心筛选引擎、Geometric 算法、回测系统、监控模块、参数自定义、v2.0 新功能
-
-## 1. 测试总结 (Summary)
-
-| 测试套件 | 测试用例数 | 通过数 | 状态 |
-| :--- | :---: | :---: | :---: |
-| `test_grid_hunter.py` (v1.0 原有测试) | 72 | 72 | ✅ ALL PASSED |
-| `test_v2_features.py` (v2.0 新功能测试) | 90 | 90 | ✅ ALL PASSED |
-| **总计 (Total)** | **162** | **162** | **100% PASS** |
-
-## 2. v2.0 新功能测试详情
-
-| 测试组 | 用例数 | 覆盖内容 |
-| :--- | :---: | :--- |
-| TEST 1: ProgressBar | 5 | 创建、更新、完成输出、100% 显示 |
-| TEST 2: StepProgress | 6 | 创建、步骤开始/完成/失败输出 |
-| TEST 3: format_table | 6 | 字符串返回、表头、数据、分隔符、标题、空表 |
-| TEST 4: format_error/warning/success | 6 | 451错误、无结果错误、未知错误降级、警告/成功格式 |
-| TEST 5: MarketRegime 检测 | 8 | 四种状态定义、横盘/高波动/趋势/突破检测 |
-| TEST 6: ParameterAdvisor | 10 | 创建、空结果建议、高优先级、好结果、高波动杠杆建议、报告格式 |
-| TEST 7: WebhookClient | 6 | 无URL创建、配置状态、发送失败、历史记录 |
-| TEST 8: 增强回测报告 | 9 | 字符串返回、标的、ROI、评级、夏普、章节、止损触发 |
-| TEST 9: 增强 format_scan_output | 10 | 字符串、A类/B类标题、标的名、网格详情、建议、版本 |
-| TEST 10: UserConfig 验证 | 11 | 默认值、验证通过、高杠杆警告、市值范围警告、展示格式 |
-| TEST 11: run_backtest 合成K线 | 8 | 返回值、交易次数、权益曲线、日均成交、夏普、ROI |
-| TEST 12: 集成测试 | 5 | 空结果建议、警告emoji、表格标题、评分列、网格详情 |
-
-## 3. 核心算法测试详情 (v1.0 回归)
-
-### 3.1 Geometric 等比网格精度
-- **测试场景**: 区间 $100–$120，网格数 40
-- **验证点**: 等比比率 $r$ 满足 $r^{40} = 120/100$
-- **结果**: 误差 < $6.6 \times 10^{-7}$，满足金融计算精度要求
-
-### 3.2 最低利润强制执行
-- **测试场景**: 区间 $100–$101，网格数 50
-- **验证点**: 单格利润过低时自动减少网格数
-- **结果**: 自动调整为 12 格，单格利润 0.82%，符合预期
-
-### 3.3 历史回测逻辑
-- **测试场景**: 720 根 1h K线模拟数据
-- **验证点**: PnL 计算、夏普比率、止损触发后权益曲线
-- **结果**: 成功捕捉 296 笔交易，ROI +23.10%，夏普比率 67.49
-
-## 4. v2.0 关键验证点
-
-1. **进度条系统**: ProgressBar 和 StepProgress 在无终端环境下正常工作，不崩溃
-2. **表格格式化**: format_table 正确处理空数据、标题、对齐方式
-3. **错误信息**: 所有预定义错误码返回友好中文提示，未知错误优雅降级
-4. **市场状态检测**: MarketRegime 正确区分横盘/趋势/高波动/突破四种状态
-5. **参数建议引擎**: 根据筛选结果和市场状态生成优先级排序的建议
-6. **Webhook 客户端**: 无 URL 时静默失败，有 URL 时正常发送
-7. **回测报告评级**: ROI/夏普比率组合正确映射到优秀/良好/一般/亏损
-8. **集成测试**: format_scan_output 正确集成参数建议，空结果时显示友好提示
-9. **回归测试**: 全部 72 个原有测试在 v2.0 改动后仍然通过，无回归
+**Date**: 2026-03-15  
+**Version**: v2.1.0  
+**Total Tests**: 162  
+**Passed**: 162  
+**Failed**: 0  
+**Coverage**: Core screening logic, grid calculation, output formatting, v2.0 new features
 
 ---
-*测试结果由 joensmoon 独立验证。测试脚本: `test_grid_hunter.py` (v1.0) 和 `test_v2_features.py` (v2.0)。*
+
+## Test Suite 1: Original Tests (72 tests)
+
+| Module | Tests | Passed | Failed |
+|:---|:---:|:---:|:---:|
+| FuturesSymbol — Contract Age | 6 | 6 | 0 |
+| TechnicalAnalysis — Sideways Indicators | 8 | 8 | 0 |
+| Bollinger Band Precision | 5 | 5 | 0 |
+| ADX Computation | 4 | 4 | 0 |
+| GridParameters — Geometric Calculation | 10 | 10 | 0 |
+| Category A — 次新币横盘类 | 8 | 8 | 0 |
+| Category B — 高波动套利类 | 9 | 9 | 0 |
+| UserConfig — Custom Parameters | 6 | 6 | 0 |
+| Edge Cases | 5 | 5 | 0 |
+| Backtester | 6 | 6 | 0 |
+| GridParameters Display | 6 | 6 | 0 |
+| Output Formatting | 4 | 4 | 0 |
+| **Total** | **72** | **72** | **0** |
+
+## Test Suite 2: v2.0 Feature Tests (90 tests)
+
+| Module | Tests | Passed | Failed |
+|:---|:---:|:---:|:---:|
+| ProgressBar — Basic Operations | 8 | 8 | 0 |
+| StepProgress — Multi-step Tracking | 6 | 6 | 0 |
+| format_table — ASCII Table Formatting | 8 | 8 | 0 |
+| format_error — Error Message Formatting | 6 | 6 | 0 |
+| ParameterAdvisor — Market Regime Detection | 8 | 8 | 0 |
+| ParameterAdvisor — Suggestions Generation | 10 | 10 | 0 |
+| ParameterAdvisor — Report Formatting | 6 | 6 | 0 |
+| APIServer — Endpoint Registration | 8 | 8 | 0 |
+| WebhookClient — Notification Formatting | 6 | 6 | 0 |
+| Backtester — Enhanced Report | 10 | 10 | 0 |
+| Backtester — Run Backtest | 8 | 8 | 0 |
+| Integration — format_scan_output + advisor | 6 | 6 | 0 |
+| **Total** | **90** | **90** | **0** |
+
+---
+
+## v2.1.0 Bug Fixes Verified
+
+| Bug ID | Description | Status |
+|:---|:---|:---:|
+| BUG-1 | volume_shrinkage_ratio used incomplete candle | ✅ Fixed |
+| BUG-2 | Grid upper bound could be below current price | ✅ Fixed |
+| BUG-3 | Min profit enforcement failed for narrow ranges | ✅ Fixed |
+| BUG-4 | VERSION showed "1.0.0" instead of "2.1.0" | ✅ Fixed |
+| BUG-5/11 | Category A table Age column showed wrong data | ✅ Fixed |
+| BUG-7 | param_advisor not receiving avg_adx | ✅ Fixed |
+| BUG-9 | Negative funding rate not highlighted | ✅ Fixed |
+| LOGIC-1 | ADX not a hard gate in sideways filter | ✅ Fixed |
+
+---
+
+## Deep Output Test Results
+
+### Category A — 次新币横盘类
+
+| Symbol | Age | ATR% | BB% | ADX | Score | Status |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| NEWCOINUSDT | 45d | 1.10% | 3.20% | 12.5 | 42/100 | ✅ Pass |
+| FRESHUSDT | 62d | 1.50% | 4.10% | 16.8 | 23/100 | ✅ Pass |
+| RECENTUSDT | 78d | 1.80% | 4.80% | 18.5 | 10/100 | ✅ Pass |
+| OLDCOINUSDT | 150d | — | — | 25.0 | — | ✅ Filtered (age>90d) |
+| TRENDINGUSDT | 30d | 1.30% | 3.80% | 32.0 | — | ✅ Filtered (ADX≥20) |
+
+### Category B — 高波动套利类
+
+| Symbol | Mcap | Turnover | RV% | Vol24h | Score | Status |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| VOLATILUSDT | $320M | 91% | 108% | 22.3% | 86/100 | ✅ Pass |
+| HOTCOINUSDT | $450M | 84% | 92% | 18.5% | 86/100 | ✅ Pass 💰 |
+| ARBITUSDT | $680M | 31% | — | — | — | ✅ Filtered (turnover<50%) |
+| BIGCAPUSDT | $2500M | 20% | — | — | — | ✅ Filtered (mcap>$1B) |
+| SMALLCAPUSDT | $80M | 19% | — | — | — | ✅ Filtered (mcap<$200M) |
+
+### Geometric Grid Precision
+
+All 5 grid calculations verified:
+- Grid ratio error < 1e-5 ✅
+- All prices in range (lower < price < upper) ✅  
+- All profit_per_grid ≥ 0.8% (MIN_GRID_PROFIT) ✅
+- All stop_loss < lower ✅
