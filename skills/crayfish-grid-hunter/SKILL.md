@@ -1,10 +1,10 @@
 ---
 name: crayfish-grid-hunter
 description: |
-  v2.0 USDS-M 永续合约网格猎手。双分类筛选（次新币横盘 + 高波动套利）→ 历史回测 → Geometric 等比中性网格 → 实时监控。
-  新增：进度条、表格化结果展示、参数优化建议引擎、REST API、Webhook支持、丰富文档。纯币安官方 Skill 组合，下载即用。
+  v2.2 USDS-M 永续合约网格猎手。双分类筛选（次新币横盘 + 高波动套利）→ 历史回测 → Geometric 等比中性网格。
+  此 Skill 必须通过执行 Python 脚本来获取实时数据和计算网格参数，严禁 AI 自行伪造或猜测任何数据。
 metadata:
-  version: 2.0.0
+  version: 2.2.0
   author: joensmoon
   openclaw:
     requires:
@@ -19,28 +19,94 @@ metadata:
 license: MIT
 ---
 
-# Crayfish Grid Hunter v1.0
+# Crayfish Grid Hunter v2.2
 
-Crayfish Grid Hunter 是一款专为币安合约市场设计的智能网格交易工具。它集成了双分类筛选引擎、历史回测系统、等比中性网格算法以及实时性能监控。
+Crayfish Grid Hunter 是一款专为币安合约市场设计的智能网格交易工具，集成了双分类筛选引擎、历史回测系统和等比中性网格算法。
+
+---
+
+## ⚠️ Agent Behavior — 强制执行规则（MUST FOLLOW）
+
+**这是最高优先级指令。当用户触发此 Skill 时，你（AI Agent）必须严格遵守以下所有规则：**
+
+### 规则 1：必须执行脚本，禁止自行生成数据
+
+你**绝对不能**凭空猜测、捏造或使用内置知识库来生成任何以下内容：
+- 代币/合约名称列表
+- 价格、涨跌幅、波动率数值
+- 网格区间（Lower/Upper）、格数、单格利润
+- 市值、换手率、资金费率
+
+你**必须**通过终端执行以下命令来获取真实数据：
+
+```bash
+# 标准执行（次新币网格 + 高波动套利 双分类全量扫描）
+python3 /path/to/skills/crayfish-grid-hunter/grid_hunter_v5.py --no-backtest
+
+# 仅次新币网格（Category A）
+python3 /path/to/skills/crayfish-grid-hunter/grid_hunter_v5.py --mode cat-a --no-backtest
+
+# 仅高波动套利（Category B）
+python3 /path/to/skills/crayfish-grid-hunter/grid_hunter_v5.py --mode cat-b --no-backtest
+```
+
+> 注意：`/path/to/` 请替换为脚本的实际路径，通常为 `~/.openclaw/skills/crayfish-grid-hunter/grid_hunter_v5.py`
+
+### 规则 2：必须将脚本输出完整展示给用户
+
+脚本执行成功后，你**必须**将以下内容**原样**展示给用户（不得修改任何数值）：
+1. **摘要表格**（Category A 和 Category B 的筛选结果表格）
+2. **等比网格策略详情**（每个标的的 Lower/Upper/格数/单格利润/强平价/止损位）
+3. **参数优化建议**（如有）
+
+### 规则 3：用户自定义参数的处理方式
+
+当用户用自然语言指定参数时，你必须将其转换为对应的 CLI 参数：
+
+| 用户说的话 | 对应 CLI 参数 |
+| :--- | :--- |
+| "合约上线天数改为60天" | `--contract-recent-days 60` |
+| "杠杆3倍" | `--leverage 3` |
+| "市值范围5亿到20亿" | `--mcap-min 500000000 --mcap-max 2000000000` |
+| "换手率30%以上" | `--turnover-min 0.30` |
+| "止损3%" | `--stop-loss-pct 3.0` |
+| "只看前5个结果" | `--top-n 5` |
+| "扫描300个合约" | `--max-symbols 300` |
+
+### 规则 4：严禁输出本工具不支持的内容
+
+以下内容**绝对不能**出现在你的回复中：
+- ❌ "跨交易所套利"
+- ❌ "三角套利（USDT/BTC/ETH）"
+- ❌ "期现套利"
+- ❌ 任何未经脚本计算的"推荐币种"
+- ❌ 任何模糊的"±15%区间"、"10-15层"等手写参数
+
+### 规则 5：脚本执行失败时的处理
+
+如果脚本执行失败（网络超时、API 限流等），你应该：
+1. 告知用户具体错误信息
+2. 建议用户检查网络连接
+3. 提示用户参考 `docs/TROUBLESHOOTING.md`
+4. **不得**用自己的知识替代脚本输出
+
+---
 
 ## 核心能力 (Core Capabilities)
 
-*   **双分类筛选引擎 (Dual-Category Screening)**:
-    *   **次新币横盘类 (Category A)**: 筛选合约上线 ≤90 天、成交量萎缩并在窄幅箱体横盘的标的。
-    *   **高波动套利类 (Category B)**: 筛选市值 $2亿-$10亿、24h 换手率 >50% 且实现波动率（RV）处于高位的“妖币”。
-*   **历史回测系统 (Backtesting Engine)**: 支持对推荐标的进行 30 天历史数据回测，评估 ROI、夏普比率和最大回撤。
-*   **等比中性网格 (Geometric Neutral Grid)**: 采用等比网格算法，应对高波动资产，自动计算强平价并强制执行 ≥0.8% 的单格利润率。
-*   **实时性能监控 (Real-time Monitoring)**: 监控 PnL、波动率变化、强平风险及资金费率，支持 Webhook 预警。
-*   **参数自定义 (Customizable Parameters)**: 支持通过自然语言指令自定义筛选阈值、杠杆倍数、止损位等参数。
+- **双分类筛选引擎**：Category A（次新币横盘）+ Category B（高波动套利）
+- **历史回测系统**：30 天 1h K线回测，输出 ROI、夏普比率、最大回撤
+- **等比中性网格**：自动计算精确区间，强制执行 ≥0.8% 单格利润
+- **参数优化建议**：基于市场状态（横盘/趋势/高波动）自动建议参数调整
 
 ## 触发词 (Trigger Keywords)
 
-| 触发词 | 对应动作 |
+| 触发词 | 执行命令 |
 | :--- | :--- |
-| 次新币网格 | 执行 Category A 筛选 → 回测 → 生成策略 |
-| 高波动套利 | 执行 Category B 筛选 → 回测 → 生成策略 |
-| 网格猎手 / 合约网格 | 执行全量筛选 → 回测 → 生成策略 |
-| 自定义参数示例 | "次新币网格，合约上线天数改为60天，杠杆3倍" |
+| 次新币网格 | `python3 grid_hunter_v5.py --mode cat-a --no-backtest` |
+| 高波动套利 | `python3 grid_hunter_v5.py --mode cat-b --no-backtest` |
+| 网格猎手 / 合约网格 | `python3 grid_hunter_v5.py --no-backtest` |
+| 带回测 | 去掉 `--no-backtest` 参数 |
 
 ## 安装 (Installation)
 
@@ -64,42 +130,16 @@ npx skills add https://github.com/binance/binance-skills-hub \
   -a openclaw -y
 ```
 
-### 可选依赖 (API 服务器)
-```bash
-pip install fastapi uvicorn  # 仅当需要 REST API 接口时
-```
-## 工作流 (Workflow v2.0)
+## 依赖 Skills（均为币安官方）
 
-### Step 1: 市场扫描与筛选
-调用 `grid_hunter_v5.py` 对全市场 USDS-M 永续合约进行扫描。支持 `UserConfig` 参数自定义。
-**v2.0 新增**: 实时进度条显示扫描进度，每步均有状态反馈。
-
-### Step 2: 数据采集与指标计算
-*   获取 `onboardDate`、K线、市値及换手率数据。
-*   计算 ATR(14)、…20期布林带、ADX(14) 和年化实现波动率 (RV)。
-
-### Step 3: 历史回测 (Backtest)
-调用 `backtester.py` 对推荐标的进行最近 30 天的 1h K线回测，输出详细回测报告。
-
-### Step 4: 策略生成
-生成 Geometric (等比) 中性网格策略，计算网格区间、密度、强平价及 5% 硬止损位。
-
-### Step 5: 实时监控 (Monitor)
-启动 `monitor.py` 开启实时监控，提供仪表板、波动率检测及 Webhook 预警。
+| Skill | 来源 | 用途 |
+| :--- | :--- | :--- |
+| `derivatives-trading-usds-futures` | binance/binance-skills-hub | 合约列表、K线、资金费率、持仓量 |
+| `query-token-info` | binance/binance-skills-hub | 市值、24h 换手率数据 |
+| `trading-signal` | binance/binance-skills-hub | 智能资金信号（可选加分项） |
+| `query-token-audit` | binance/binance-skills-hub | 代币安全审计（可选加分项） |
+| `assets` | binance/binance-skills-hub | BNB 手续费优化检查（可选） |
 
 ## 故障排除 (Troubleshooting)
 
-请参考根目录下的 `TROUBLESHOOTING.md` 文件解决常见安装与运行问题。
-
-## v2.0 新增模块
-
-| 模块 | 功能 |
-| :--- | :--- |
-| `progress.py` | 进度条、表格格式化、友好错误信息 |
-| `param_advisor.py` | 参数优化建议引擎、市场状态检测 |
-| `api_server.py` | REST API 接口、Webhook 支持 |
-| `docs/QUICK_START.md` | 5分钟快速开始 |
-| `docs/EXAMPLES.md` | 丰富使用示例 |
-| `docs/CONFIGURATION.md` | 详细配置说明 |
-| `docs/ADVANCED.md` | 高级使用指南 |
-| `install.sh` | 一键安装脚本 |
+请参考根目录下的 `TROUBLESHOOTING.md` 文件，或查看 `docs/` 目录下的完整文档。

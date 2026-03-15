@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"
@@ -1292,3 +1292,179 @@ def format_scan_output(
     lines.append(f"{'='*70}\n")
 
     return "\n".join(lines)
+
+
+# ============================================================
+# CLI Entry Point
+# ============================================================
+
+def _build_arg_parser():
+    """Build the command-line argument parser for direct script execution."""
+    import argparse
+    p = argparse.ArgumentParser(
+        prog="grid_hunter_v5",
+        description="Crayfish Grid Hunter v2.2 — USDS-M Futures Grid Scanner",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run full dual-category scan with defaults
+  python3 grid_hunter_v5.py
+
+  # Category A only: recent contracts ≤60 days, leverage 3x
+  python3 grid_hunter_v5.py --mode cat-a --contract-recent-days 60 --leverage 3
+
+  # Category B only: market cap $500M-$2B, turnover ≥30%
+  python3 grid_hunter_v5.py --mode cat-b --mcap-min 500000000 --mcap-max 2000000000 --turnover-min 0.30
+
+  # Full scan, top 5 results each, no backtest
+  python3 grid_hunter_v5.py --top-n 5 --no-backtest
+        """,
+    )
+
+    # Scan mode
+    p.add_argument(
+        "--mode",
+        choices=["all", "cat-a", "cat-b"],
+        default="all",
+        help="筛选模式: all=双分类全量, cat-a=仅次新币横盘, cat-b=仅高波动套利 (default: all)",
+    )
+
+    # Category A params
+    g_a = p.add_argument_group("Category A — 次新币横盘类参数")
+    g_a.add_argument("--contract-recent-days", type=int, default=None,
+                     metavar="DAYS", help=f"合约上线天数上限 (default: {CONTRACT_RECENT_DAYS})")
+    g_a.add_argument("--volume-shrink-ratio", type=float, default=None,
+                     metavar="RATIO", help=f"量缩比率阈值 0-1 (default: {VOLUME_SHRINK_RATIO})")
+    g_a.add_argument("--atr-sideways-pct", type=float, default=None,
+                     metavar="PCT", help=f"ATR横盘阈值%% (default: {ATR_SIDEWAYS_PCT})")
+    g_a.add_argument("--bb-width-sideways", type=float, default=None,
+                     metavar="PCT", help=f"布林带宽度横盘阈值%% (default: {BB_WIDTH_SIDEWAYS})")
+    g_a.add_argument("--adx-sideways", type=float, default=None,
+                     metavar="VAL", help=f"ADX横盘阈值 (default: {ADX_SIDEWAYS})")
+
+    # Category B params
+    g_b = p.add_argument_group("Category B — 高波动套利类参数")
+    g_b.add_argument("--mcap-min", type=float, default=None,
+                     metavar="USD", help=f"市值下限 USD (default: {MCAP_MIN:.0f})")
+    g_b.add_argument("--mcap-max", type=float, default=None,
+                     metavar="USD", help=f"市值上限 USD (default: {MCAP_MAX:.0f})")
+    g_b.add_argument("--turnover-min", type=float, default=None,
+                     metavar="RATIO", help=f"换手率下限 0-1 (default: {TURNOVER_MIN})")
+    g_b.add_argument("--rv-min", type=float, default=None,
+                     metavar="PCT", help=f"年化RV下限%% (default: {HIGH_VOL_RV_MIN})")
+
+    # Grid params
+    g_g = p.add_argument_group("网格参数")
+    g_g.add_argument("--leverage", type=int, default=None,
+                     metavar="X", help=f"杠杆倍数 (default: {DEFAULT_LEVERAGE})")
+    g_g.add_argument("--stop-loss-pct", type=float, default=None,
+                     metavar="PCT", help="止损百分比 (default: 5.0)")
+    g_g.add_argument("--min-grid-profit", type=float, default=None,
+                     metavar="RATIO", help=f"最低单格利润 0-1 (default: {MIN_GRID_PROFIT})")
+
+    # Scan control
+    g_s = p.add_argument_group("扫描控制")
+    g_s.add_argument("--max-symbols", type=int, default=200,
+                     metavar="N", help="最多扫描的合约数量 (default: 200)")
+    g_s.add_argument("--top-n", type=int, default=3,
+                     metavar="N", help="每个分类返回的最佳结果数量 (default: 3)")
+    g_s.add_argument("--no-backtest", action="store_true",
+                     help="跳过历史回测步骤（加快速度）")
+    g_s.add_argument("--no-progress", action="store_true",
+                     help="不显示进度条（适合日志输出）")
+
+    return p
+
+
+def main():
+    """CLI entry point for Crayfish Grid Hunter."""
+    parser = _build_arg_parser()
+    args = parser.parse_args()
+
+    # Build UserConfig from CLI args
+    cfg_kwargs = {}
+    if args.contract_recent_days is not None:
+        cfg_kwargs["contract_recent_days"] = args.contract_recent_days
+    if args.volume_shrink_ratio is not None:
+        cfg_kwargs["volume_shrink_ratio"] = args.volume_shrink_ratio
+    if args.atr_sideways_pct is not None:
+        cfg_kwargs["atr_sideways_pct"] = args.atr_sideways_pct
+    if args.bb_width_sideways is not None:
+        cfg_kwargs["bb_width_sideways"] = args.bb_width_sideways
+    if args.adx_sideways is not None:
+        cfg_kwargs["adx_sideways"] = args.adx_sideways
+    if args.mcap_min is not None:
+        cfg_kwargs["mcap_min"] = args.mcap_min
+    if args.mcap_max is not None:
+        cfg_kwargs["mcap_max"] = args.mcap_max
+    if args.turnover_min is not None:
+        cfg_kwargs["turnover_min"] = args.turnover_min
+    if args.rv_min is not None:
+        cfg_kwargs["rv_min"] = args.rv_min
+    if args.leverage is not None:
+        cfg_kwargs["leverage"] = args.leverage
+    if args.stop_loss_pct is not None:
+        cfg_kwargs["stop_loss_pct"] = args.stop_loss_pct
+    if args.min_grid_profit is not None:
+        cfg_kwargs["min_grid_profit"] = args.min_grid_profit
+    cfg_kwargs["max_symbols"] = args.max_symbols
+    cfg_kwargs["top_n"] = args.top_n
+
+    config = UserConfig(**cfg_kwargs)
+
+    # Validate config
+    warnings = config.validate()
+    if warnings:
+        print("\n⚠️  参数警告:")
+        for w in warnings:
+            print(f"   • {w}")
+        print()
+
+    # Print config summary
+    print(config.to_display())
+    print()
+
+    # Run scan
+    show_progress = not args.no_progress
+    cat_a, cat_b = run_dual_category_scan(
+        max_symbols=config.max_symbols,
+        top_n_each=config.top_n,
+        config=config,
+        show_progress=show_progress,
+    )
+
+    # Filter by mode
+    if args.mode == "cat-a":
+        cat_b = []
+    elif args.mode == "cat-b":
+        cat_a = []
+
+    # Run backtest if requested
+    if not args.no_backtest and (cat_a or cat_b):
+        print("\n📊 正在运行历史回测...\n")
+        try:
+            import sys as _sys
+            import os as _os
+            _sys.path.insert(0, _os.path.dirname(__file__))
+            from backtester import run_backtest_for_candidates
+            all_candidates = cat_a + cat_b
+            backtest_results = run_backtest_for_candidates(
+                all_candidates,
+                days=config.backtest_days,
+                interval=config.backtest_interval,
+            )
+            for gp in all_candidates:
+                bt = backtest_results.get(gp.symbol)
+                if bt:
+                    print(bt.format_report())
+        except Exception as e:
+            print(f"  ⚠️  回测模块加载失败: {e}")
+            print("  💡 如需回测功能，请确保 backtester.py 在同一目录下。")
+
+    # Format and print final output
+    output = format_scan_output(cat_a, cat_b, config=config)
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

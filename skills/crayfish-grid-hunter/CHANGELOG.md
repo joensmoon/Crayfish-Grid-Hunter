@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.2.0] — 2026-03-15
+
+### 关键修复 (Critical Fixes)
+- **[SKILL.md] 彻底重写 Agent Behavior 指令**：新增 5 条强制规则，明确禁止 AI 自行生成数据，必须通过执行脚本获取真实数据
+- **[grid_hunter_v5.py] 新增完整 CLI 入口**：添加 `if __name__ == '__main__'` 入口和 `argparse` 参数解析，支持所有 `UserConfig` 字段通过命令行传递
+- **[SKILL.md] 修复参数传递指令**：SKILL.md 中的 CLI 命令现在真实可执行（之前的 `--contract-recent-days` 等参数无法工作）
+
+### 新增 CLI 参数
+- `--mode {all,cat-a,cat-b}`：选择筛选模式（全量/仅次新币/仅高波动）
+- `--contract-recent-days`、`--leverage`、`--mcap-min`、`--mcap-max`、`--turnover-min` 等全部 UserConfig 字段
+- `--no-backtest`：跳过回测加快速度
+- `--no-progress`：禁用进度条（适合日志输出）
+
+### 文档更新
+- SKILL.md 新增自然语言 → CLI 参数对照表
+- SKILL.md 明确列出 5 类禁止输出内容（跨交易所套利、三角套利等）
+- README.md 同步更新 v2.2.0 说明
+
 ## [2.1.0] — 2026-03-15
 
 ### Bug Fixes (Critical)
