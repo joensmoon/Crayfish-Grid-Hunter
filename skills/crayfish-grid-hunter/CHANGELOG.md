@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.2.2] — 2026-03-15
+
+### OpenClaw 兼容性修复
+- **[SKILL.md] frontmatter 格式符合 OpenClaw 规范**：
+  - `description` 改为单行（原多行 `|` 块格式不被 OpenClaw parser 支持）
+  - `metadata` 改为单行 JSON（OpenClaw 要求 `metadata` 必须是单行 JSON 对象）
+  - 移除旧的 `requires` 列表格式（OpenClaw 使用 `metadata.openclaw.requires.bins` 格式）
+  - 新增 `requires.bins: ["python3"]` — OpenClaw 在加载时检查 `python3` 是否在 PATH 中
+  - 新增 `install` 字段 — 支持 OpenClaw macOS Skills UI 一键安装
+  - 新增 `homepage` 字段 — 在 Skills UI 显示项目主页
+  - 新增 `emoji: 🦞` — 在 Skills UI 显示图标
+- **[SKILL.md] 脚本路径使用 `{baseDir}` 变量**：OpenClaw 自动注入 Skill 目录绝对路径，无需用户手动替换路径
+- **[SKILL.md] 安装命令更新为 `clawhub install`**：符合 OpenClaw 官方 ClawHub 安装规范
+- **[SKILL.md] 故障排除路径使用 `{baseDir}` 变量**
+
+### 测试
+- 新增 SKILL.md 格式合规性自动检查（8 项）
+- 总计 165/165 通过
+
 ## [2.2.1] — 2026-03-15
 
 ### 关键修复
