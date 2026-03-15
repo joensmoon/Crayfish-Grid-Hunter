@@ -114,3 +114,4 @@ pip3 install requests tabulate
 | :--- | :--- | :--- |
 | `derivatives-trading-usds-futures` | binance/binance-skills-hub | 合约列表、K线、资金费率 |
 | `query-token-info` | binance/binance-skills-hub | 市值、换手率数据 |
+

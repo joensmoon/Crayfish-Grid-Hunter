@@ -48,3 +48,4 @@ Crayfish 内置了 `MIN_GRID_PROFIT = 0.8%` 的硬性要求。
 
 Crayfish 利用币安 Web3 Skill `trading-signal` 来验证标的。
 如果系统推荐的某个标的近期出现了 Smart Money 的大量买入信号，该标的在最终排名中的得分会获得 15% 的加权提升。这大大提高了突破行情的胜率。
+

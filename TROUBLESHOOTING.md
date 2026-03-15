@@ -1,6 +1,6 @@
 # 故障排除指南 (Troubleshooting Guide)
 
-本指南旨在帮助用户解决在 OpenClaw 环境中使用 **Crayfish Grid Hunter v1.0** 时可能遇到的常见问题。
+本指南旨在帮助用户解决在 OpenClaw 环境中使用 **Crayfish Grid Hunter v1.0.0** 时可能遇到的常见问题。
 
 ## 1. 安装与环境问题
 

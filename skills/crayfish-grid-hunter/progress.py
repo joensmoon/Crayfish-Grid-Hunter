@@ -455,3 +455,4 @@ def format_scan_results_table(cat_a_results: List[Dict], cat_b_results: List[Dic
         lines.append(format_error("no_results_b"))
 
     return "\n".join(lines)
+

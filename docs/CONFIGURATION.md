@@ -51,3 +51,4 @@ Crayfish Grid Hunter 的核心引擎 `grid_hunter_v5.py` 中定义了一个 `Use
 
 在 OpenClaw 中，您无需修改代码，只需在对话中用自然语言提出即可：
 > "帮我跑一次网格猎手，把 leverage 改为 3，top_n 改为 5，backtest_days 改为 14。"
+

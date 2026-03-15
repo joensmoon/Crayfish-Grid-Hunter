@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Crayfish Grid Hunter v5.2 — Comprehensive Test Suite
+Crayfish Grid Hunter v1.0.0 — Comprehensive Test Suite
 =====================================================
 Tests all core algorithms with mock data (no live API required).
 
@@ -439,9 +439,9 @@ check("Neutral funding display mentions '中性'",
 
 
 # ============================================================
-# TEST 9: Monitor — Existing Alert Checks (v4.4 regression)
+# TEST 9: Monitor — Existing Alert Checks
 # ============================================================
-print("\n[TEST 9] Monitor — Existing Alert Checks (v4.4 regression)")
+print("\n[TEST 9] Monitor — Existing Alert Checks")
 
 monitor = create_monitor(pnl_loss_critical_pct=-5.0, boundary_proximity_critical_pct=3.0,
     stop_loss_proximity_critical_pct=2.0, volume_spike_multiplier=2.5)

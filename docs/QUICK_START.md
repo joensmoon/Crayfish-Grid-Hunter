@@ -38,3 +38,4 @@ export BINANCE_API_SECRET="您的API_SECRET"
 *   查看 [EXAMPLES.md](EXAMPLES.md) 了解更多触发词和自定义参数。
 *   查看 [CONFIGURATION.md](CONFIGURATION.md) 了解如何微调策略参数。
 *   如果遇到问题，请参考 [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)。
+

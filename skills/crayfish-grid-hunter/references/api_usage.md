@@ -144,3 +144,4 @@ This returns `{"spotBNBBurn": true/false, "interestBNBBurn": true/false}`. If `s
 `POST /sapi/v1/asset/getUserAsset`
 
 This returns the user's asset balances. Crayfish Grid Hunter uses this to verify the user has sufficient funds for the recommended grid configuration.
+

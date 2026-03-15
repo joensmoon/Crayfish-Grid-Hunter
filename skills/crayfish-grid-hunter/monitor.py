@@ -199,7 +199,7 @@ class MonitorThresholds:
     api_error_rate_medium_pct: float = 5.0  # MEDIUM: Error rate > 5%
     api_error_rate_high_pct: float = 20.0   # HIGH: Error rate > 20%
 
-    # --- Futures-Specific (v5.0) ---
+    # --- Futures-Specific ---
     liquidation_proximity_pct: float = 10.0  # CRITICAL: Within 10% of liquidation price
     funding_rate_high_pct: float = 0.003     # HIGH: Funding rate > 0.3% (long grid paying)
     funding_rate_extreme_pct: float = 0.005  # CRITICAL: Funding rate > 0.5%
@@ -707,7 +707,7 @@ class GridPerformanceMonitor:
 # ============================================================
 
 # ============================================================
-# Futures-Specific Monitoring Helpers (v5.0)
+# Futures-Specific Monitoring Helpers
 # ============================================================
 
 def check_funding_and_liquidation(
@@ -862,7 +862,7 @@ def create_monitor(
 
 
 # ============================================================
-# v5.3 — Enhanced Real-Time Performance Monitoring
+# Enhanced Real-Time Performance Monitoring
 # ============================================================
 
 @dataclass
@@ -897,7 +897,7 @@ class VolatilityRegime(Enum):
 
 class RealTimeMonitor:
     """
-    v5.3 Enhanced Real-Time Monitor with:
+    Enhanced Real-Time Monitor with:
     - Performance history tracking (time-series snapshots)
     - Volatility regime detection & transition alerts
     - Auto grid adjustment suggestions
@@ -1154,7 +1154,7 @@ class RealTimeMonitor:
         """Generate a real-time dashboard view with performance stats."""
         lines = [
             "=" * 65,
-            f"  CRAYFISH GRID HUNTER v5.3 — REAL-TIME DASHBOARD",
+            f"  CRAYFISH GRID HUNTER v1.0.0 — REAL-TIME DASHBOARD",
             f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "=" * 65,
         ]
@@ -1202,7 +1202,7 @@ def create_realtime_monitor(
     snapshot_interval_sec: int = 300,
     **kwargs,
 ) -> RealTimeMonitor:
-    """Factory for creating a v5.3 enhanced real-time monitor."""
+    """Factory for creating an enhanced real-time monitor."""
     base = create_monitor(**{k: v for k, v in kwargs.items()
                             if k in ('pnl_loss_critical_pct', 'pnl_loss_high_pct',
                                      'boundary_proximity_critical_pct',

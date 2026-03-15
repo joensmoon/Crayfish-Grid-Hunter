@@ -526,3 +526,4 @@ def run_backtest(
     bt = GridBacktester(config)
     result = bt.run(klines)
     return result
+

@@ -115,3 +115,4 @@ Grid Hunter monitors active grid positions for potential breakout conditions usi
 | Volume spike | 24h volume > 200% of average | HIGH |
 | Price change | \|24h change\| > 5% | HIGH |
 | Combined (price + volume) | Both conditions met | CRITICAL |
+

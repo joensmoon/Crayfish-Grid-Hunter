@@ -1,5 +1,5 @@
 """
-Crayfish Grid Hunter v5.2 — Futures Grid Engine
+Crayfish Grid Hunter v1.0.0 — Futures Grid Engine
 ================================================
 Core engine for USDS-M Perpetual Futures grid trading.
 
@@ -74,7 +74,7 @@ HIGH_VOL_48H_MIN_PCT = 10.0     # 48h price change abs > 10%
 
 
 # ============================================================
-# User-Customizable Parameters (v5.3)
+# User-Customizable Parameters
 # ============================================================
 
 @dataclass
@@ -1268,7 +1268,7 @@ def format_scan_output(
     Format the dual-category scan results for user display.
     Includes rich tables, grid strategy details, and parameter suggestions.
 
-    v1.0.01 improvements:
+    Improvements:
     - Category A table now shows contract age, ATR, BB width, ADX (not volatility)
     - Category B table highlights negative funding rate opportunities
     - param_advisor receives avg_adx for accurate regime detection
@@ -1405,7 +1405,7 @@ def _build_arg_parser():
     import argparse
     p = argparse.ArgumentParser(
         prog="grid_hunter_v5",
-        description="Crayfish Grid Hunter v1.0.02 — USDS-M Futures Grid Scanner",
+        description="Crayfish Grid Hunter v1.0.0 — USDS-M Futures Grid Scanner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

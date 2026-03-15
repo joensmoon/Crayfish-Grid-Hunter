@@ -130,3 +130,4 @@ MIT License. For learning and research purposes only. Not investment advice.
 ## Version History
 
 This is the official v1.0.0 release. All previous development versions (v5.x, v2.x) have been consolidated into this stable release.
+
