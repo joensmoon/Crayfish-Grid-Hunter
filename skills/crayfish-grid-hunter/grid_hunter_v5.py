@@ -38,7 +38,7 @@ import requests
 # ============================================================
 # Configuration
 # ============================================================
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 FAPI_BASE = "https://fapi.binance.com"
 FAPI_FALLBACK = "https://testnet.binancefuture.com"
 WEB3_BASE = "https://web3.binance.com"
@@ -61,11 +61,16 @@ ATR_SIDEWAYS_PCT = 2.0           # ATR(14) < 2% → sideways
 BB_WIDTH_SIDEWAYS = 5.0          # BB width < 5% → narrow range
 ADX_SIDEWAYS = 20                # ADX(14) < 20 → no trend
 
+# Category A market cap thresholds (次新币)
+CAT_A_MCAP_MIN = 10_000_000      # $10M minimum market cap
+CAT_A_MCAP_MAX = 200_000_000     # $200M maximum market cap
+
 # Category B thresholds
 MCAP_MIN = 200_000_000           # $200M minimum market cap
 MCAP_MAX = 1_000_000_000         # $1B maximum market cap
 TURNOVER_MIN = 0.50              # 24h volume / market cap > 50%
 HIGH_VOL_RV_MIN = 15.0           # Realized volatility > 15% annualized
+HIGH_VOL_48H_MIN_PCT = 10.0     # 48h price change abs > 10%
 
 
 # ============================================================
@@ -92,12 +97,16 @@ class UserConfig:
     atr_sideways_pct: float = ATR_SIDEWAYS_PCT
     bb_width_sideways: float = BB_WIDTH_SIDEWAYS
     adx_sideways: float = ADX_SIDEWAYS
+    # Category A market cap filter ($10M - $200M by default)
+    cat_a_mcap_min: float = CAT_A_MCAP_MIN
+    cat_a_mcap_max: float = CAT_A_MCAP_MAX
 
     # --- Category B: High Volatility Arbitrage ---
     mcap_min: float = MCAP_MIN
     mcap_max: float = MCAP_MAX
     turnover_min: float = TURNOVER_MIN
     rv_min: float = HIGH_VOL_RV_MIN
+    high_vol_48h_min_pct: float = HIGH_VOL_48H_MIN_PCT  # 48h abs price change > 10%
     min_quote_volume: float = 10_000_000
 
     # --- Grid Parameters ---
@@ -140,8 +149,8 @@ class UserConfig:
         """Format config as readable summary."""
         lines = [
             "当前自定义参数:",
-            f"  Category A: 合约≤{self.contract_recent_days}天, 量缩<{self.volume_shrink_ratio*100:.0f}%, ATR<{self.atr_sideways_pct}%, BB<{self.bb_width_sideways}%, ADX<{self.adx_sideways}",
-            f"  Category B: 市值${self.mcap_min/1e6:.0f}M-${self.mcap_max/1e6:.0f}M, 换手率>{self.turnover_min*100:.0f}%, RV>{self.rv_min}%",
+            f"  Category A: 合约≤{self.contract_recent_days}天, 市値${self.cat_a_mcap_min/1e6:.0f}M-${self.cat_a_mcap_max/1e6:.0f}M, 量缩<{self.volume_shrink_ratio*100:.0f}%, ATR<{self.atr_sideways_pct}%, BB<{self.bb_width_sideways}%, ADX<{self.adx_sideways}",
+            f"  Category B: 市値${self.mcap_min/1e6:.0f}M-${self.mcap_max/1e6:.0f}M, 48h涨跌幅>{self.high_vol_48h_min_pct:.0f}%, 换手率>{self.turnover_min*100:.0f}%, RV>{self.rv_min}%",
             f"  网格: {self.leverage}×杠杆, 利润{self.min_grid_profit*100:.1f}%-{self.max_grid_profit*100:.1f}%, 止损{self.stop_loss_pct}%",
             f"  筛选: Top {self.top_n}, 分析前{self.max_symbols}个币种",
         ]
@@ -194,6 +203,10 @@ class MarketSnapshot:
     next_funding_time: int
     high_24h: float
     low_24h: float
+    # 48h window fields (computed from 1h klines, default 0 if unavailable)
+    high_48h: float = 0.0
+    low_48h: float = 0.0
+    price_change_pct_48h: float = 0.0  # (close_now - open_48h_ago) / open_48h_ago * 100
 
     @property
     def volatility_24h_pct(self) -> float:
@@ -201,6 +214,14 @@ class MarketSnapshot:
         if self.last_price > 0:
             return ((self.high_24h - self.low_24h) / self.last_price) * 100
         return 0.0
+
+    @property
+    def volatility_48h_pct(self) -> float:
+        """48h price range as a percentage of last price."""
+        if self.last_price > 0 and self.high_48h > 0 and self.low_48h > 0:
+            return ((self.high_48h - self.low_48h) / self.last_price) * 100
+        # Fallback: use 24h * 1.4 estimate if 48h data unavailable
+        return self.volatility_24h_pct * 1.4
 
     @property
     def volume_oi_ratio(self) -> float:
@@ -686,10 +707,37 @@ def build_market_snapshot(symbol: str, ticker: dict, mark: dict, oi: float) -> M
     )
 
 
+def enrich_snapshot_48h(snap: MarketSnapshot, klines_1h: List[list]) -> None:
+    """
+    Enrich a MarketSnapshot with 48h window data from 1h klines.
+
+    Uses the last 48 hourly candles to compute:
+      - high_48h: highest high in the last 48 hours
+      - low_48h:  lowest low in the last 48 hours
+      - price_change_pct_48h: (current_close - open_48h_ago) / open_48h_ago * 100
+
+    Data source: fapi/v1/klines?interval=1h&limit=49
+    Skill: derivatives-trading-usds-futures
+    """
+    if len(klines_1h) < 2:
+        return
+    # Use last 48 candles (index -48 to -1)
+    window = klines_1h[-48:] if len(klines_1h) >= 48 else klines_1h
+    highs = [float(k[2]) for k in window]
+    lows  = [float(k[3]) for k in window]
+    open_48h = float(window[0][1])   # open of the oldest candle in window
+    close_now = float(window[-1][4]) # close of the most recent candle
+    snap.high_48h = max(highs) if highs else 0.0
+    snap.low_48h  = min(lows)  if lows  else 0.0
+    if open_48h > 0:
+        snap.price_change_pct_48h = (close_now - open_48h) / open_48h * 100
+
+
 def screen_recent_contracts(
     symbols: List[FuturesSymbol],
     snapshots: Dict[str, MarketSnapshot],
     technicals: Dict[str, TechnicalAnalysis],
+    token_data: Optional[Dict[str, TokenMarketData]] = None,
     top_n: int = 3,
     config: Optional[UserConfig] = None,
 ) -> List[Tuple[FuturesSymbol, MarketSnapshot, TechnicalAnalysis, float, str]]:
@@ -698,10 +746,12 @@ def screen_recent_contracts(
 
     Criteria:
       1. Contract onboarded ≤ 90 days (onboardDate)
-      2. Volume shrinkage: 24h volume < 50% of 7-day average
-      3. Sideways: ATR(14) < 2% OR BB_width < 5% OR ADX(14) < 20
+      2. Market cap $10M – $200M (from query-token-info, if available)
+      3. Volume shrinkage: 24h volume < 50% of 7-day average
+      4. Sideways: ADX(14) < 20 AND (ATR(14) < 2% OR BB_width < 5%)
     """
     cfg = config or DEFAULT_CONFIG
+    td = token_data or {}
     candidates = []
     for sym in symbols:
         # Use config threshold for contract age
@@ -713,6 +763,14 @@ def screen_recent_contracts(
             continue
         if snap.last_price <= 0:
             continue
+
+        # Market cap filter (Category A: $10M - $200M)
+        # Only apply if token_data is available for this symbol
+        tdata = td.get(sym.base_asset)
+        if tdata and tdata.symbol.upper() == sym.base_asset.upper():
+            mcap = tdata.market_cap
+            if mcap > 0 and not (cfg.cat_a_mcap_min <= mcap <= cfg.cat_a_mcap_max):
+                continue
 
         # Volume shrinkage check (using config threshold)
         vol_ratio = tech.volume_shrinkage_ratio
@@ -745,9 +803,16 @@ def screen_recent_contracts(
 
         score = sideways_score + shrink_score + recency_bonus
 
+        # Include market cap in reason if available
+        mcap_info = ""
+        tdata2 = td.get(sym.base_asset)
+        if tdata2 and tdata2.symbol.upper() == sym.base_asset.upper() and tdata2.market_cap > 0:
+            mcap_info = f"市値${tdata2.market_cap/1e6:.0f}M; "
+
         reason = (
             f"合约上线{sym.contract_age_days:.0f}天; "
-            f"成交量萎缩至{vol_ratio*100:.0f}%; "
+            f"{mcap_info}"
+            f"成交量赎缩至{vol_ratio*100:.0f}%; "
             f"ATR={tech.atr_14_pct:.2f}%, BB宽={tech.bb_width_pct:.2f}%, ADX={tech.adx_14:.1f}"
         )
         candidates.append((sym, snap, tech, score, reason))
@@ -770,8 +835,12 @@ def screen_high_volatility(
     Criteria:
       1. Market cap $200M – $1B (from query-token-info)
       2. 24h turnover rate > 50% (quoteVolume / marketCap)
-      3. Realized volatility > 15% annualized
-      4. Volume confirmation: quoteVolume > $10M (active trading)
+      3. 48h price change abs > 10% (from 1h klines window)
+      4. Realized volatility > 15% annualized
+      5. Volume confirmation: quoteVolume > $10M (active trading)
+
+    Note: 48h window uses 1h klines (limit=49) to capture price moves
+    that span across the 24h boundary (e.g. a pump that started 30h ago).
     """
     cfg = config or DEFAULT_CONFIG
     # NOTE: `symbols` is already filtered from fapi/v1/exchangeInfo (USDS-M perpetual
@@ -809,6 +878,12 @@ def screen_high_volatility(
         if turnover < cfg.turnover_min:
             continue
 
+        # 48h price change filter: abs(price_change_48h) > 10%
+        # This is the primary high-volatility signal using the 48h window
+        pct_48h = snap.price_change_pct_48h
+        if abs(pct_48h) < cfg.high_vol_48h_min_pct:
+            continue
+
         # Realized volatility (using config threshold)
         rv = tech.realized_volatility_pct
         if rv < cfg.rv_min:
@@ -818,21 +893,23 @@ def screen_high_volatility(
         if snap.quote_volume_24h < cfg.min_quote_volume:
             continue
 
-        # Score
-        rv_score = min(rv / 50 * 30, 30)
-        turnover_score = min(turnover / 2.0 * 25, 25)
-        # Optimal intraday vol: 15-25% is ideal for grid trading
-        intraday_vol = snap.volatility_24h_pct
-        vol_score = 25 if 15 <= intraday_vol <= 25 else max(0, 25 - abs(intraday_vol - 20) * 1.5)
-        # Volume strength
-        vol_strength = min(snap.quote_volume_24h / 100_000_000 * 20, 20)
-        score = rv_score + turnover_score + vol_score + vol_strength
+        # Score — weight 48h move heavily (primary signal)
+        rv_score = min(rv / 50 * 25, 25)
+        turnover_score = min(turnover / 2.0 * 20, 20)
+        # 48h move score: larger absolute move = higher score (up to 30 pts)
+        move_score = min(abs(pct_48h) / 50 * 30, 30)
+        # Optimal intraday vol: 10-30% is ideal for grid trading
+        intraday_vol = snap.volatility_48h_pct
+        vol_score = 25 if 10 <= intraday_vol <= 30 else max(0, 25 - abs(intraday_vol - 20) * 1.0)
+        score = rv_score + turnover_score + move_score + vol_score
 
+        direction = "涨" if pct_48h > 0 else "跌"
         reason = (
-            f"市值${mcap/1e6:.0f}M; "
+            f"市値${mcap/1e6:.0f}M; "
+            f"48h{direction}{abs(pct_48h):.1f}%; "
             f"换手率{turnover*100:.0f}%; "
             f"RV={rv:.1f}%/yr; "
-            f"24h波动={intraday_vol:.1f}%"
+            f"48h波动幅={intraday_vol:.1f}%"
         )
         candidates.append((sym, snap, tech, score, reason))
 
@@ -1093,6 +1170,11 @@ def run_dual_category_scan(
                 sym.symbol, closes, highs, lows, volumes
             )
 
+        # Enrich snapshot with 48h window (1h klines, limit=49)
+        klines_1h = fetch_klines(sym.symbol, interval="1h", limit=49)
+        if klines_1h:
+            enrich_snapshot_48h(snap, klines_1h)
+
     if bar:
         bar.finish(f"已获取 {len(technicals)} 个合约的技术指标")
     _step_done(1, f"已处理 {len(snapshots)} 个快照, {len(technicals)} 个技术分析")
@@ -1130,7 +1212,9 @@ def run_dual_category_scan(
     # --- Step 3: Category A Screening ---
     _step_start(3)
     cat_a_raw = screen_recent_contracts(
-        active_symbols, snapshots, technicals, top_n=top_n_each, config=cfg
+        active_symbols, snapshots, technicals,
+        token_data=token_data,  # Pass token_data for market cap filter ($10M-$200M)
+        top_n=top_n_each, config=cfg
     )
     if cat_a_raw:
         _step_done(3, f"找到 {len(cat_a_raw)} 个次新币横盘标的")
@@ -1351,25 +1435,31 @@ Examples:
     g_a = p.add_argument_group("Category A — 次新币横盘类参数")
     g_a.add_argument("--contract-recent-days", type=int, default=None,
                      metavar="DAYS", help=f"合约上线天数上限 (default: {CONTRACT_RECENT_DAYS})")
+    g_a.add_argument("--cat-a-mcap-min", type=float, default=None,
+                     metavar="USD", help=f"次新币市値下限 USD (default: {CAT_A_MCAP_MIN:.0f})")
+    g_a.add_argument("--cat-a-mcap-max", type=float, default=None,
+                     metavar="USD", help=f"次新币市値上限 USD (default: {CAT_A_MCAP_MAX:.0f})")
     g_a.add_argument("--volume-shrink-ratio", type=float, default=None,
-                     metavar="RATIO", help=f"量缩比率阈值 0-1 (default: {VOLUME_SHRINK_RATIO})")
+                     metavar="RATIO", help=f"量缩比率阈値 0-1 (default: {VOLUME_SHRINK_RATIO})")
     g_a.add_argument("--atr-sideways-pct", type=float, default=None,
-                     metavar="PCT", help=f"ATR横盘阈值%% (default: {ATR_SIDEWAYS_PCT})")
+                     metavar="PCT", help=f"ATR横盘阈値%% (default: {ATR_SIDEWAYS_PCT})")
     g_a.add_argument("--bb-width-sideways", type=float, default=None,
-                     metavar="PCT", help=f"布林带宽度横盘阈值%% (default: {BB_WIDTH_SIDEWAYS})")
+                     metavar="PCT", help=f"布林带宽度横盘阈値%% (default: {BB_WIDTH_SIDEWAYS})")
     g_a.add_argument("--adx-sideways", type=float, default=None,
-                     metavar="VAL", help=f"ADX横盘阈值 (default: {ADX_SIDEWAYS})")
+                     metavar="VAL", help=f"ADX横盘阈値 (default: {ADX_SIDEWAYS})")
 
     # Category B params
     g_b = p.add_argument_group("Category B — 高波动套利类参数")
     g_b.add_argument("--mcap-min", type=float, default=None,
-                     metavar="USD", help=f"市值下限 USD (default: {MCAP_MIN:.0f})")
+                     metavar="USD", help=f"市値下限 USD (default: {MCAP_MIN:.0f})")
     g_b.add_argument("--mcap-max", type=float, default=None,
-                     metavar="USD", help=f"市值上限 USD (default: {MCAP_MAX:.0f})")
+                     metavar="USD", help=f"市値上限 USD (default: {MCAP_MAX:.0f})")
     g_b.add_argument("--turnover-min", type=float, default=None,
                      metavar="RATIO", help=f"换手率下限 0-1 (default: {TURNOVER_MIN})")
     g_b.add_argument("--rv-min", type=float, default=None,
                      metavar="PCT", help=f"年化RV下限%% (default: {HIGH_VOL_RV_MIN})")
+    g_b.add_argument("--high-vol-48h-min-pct", type=float, default=None,
+                     metavar="PCT", help=f"48h涨跌幅绝对値下限%% (default: {HIGH_VOL_48H_MIN_PCT})")
 
     # Grid params
     g_g = p.add_argument_group("网格参数")
@@ -1411,6 +1501,10 @@ def main():
         cfg_kwargs["bb_width_sideways"] = args.bb_width_sideways
     if args.adx_sideways is not None:
         cfg_kwargs["adx_sideways"] = args.adx_sideways
+    if args.cat_a_mcap_min is not None:
+        cfg_kwargs["cat_a_mcap_min"] = args.cat_a_mcap_min
+    if args.cat_a_mcap_max is not None:
+        cfg_kwargs["cat_a_mcap_max"] = args.cat_a_mcap_max
     if args.mcap_min is not None:
         cfg_kwargs["mcap_min"] = args.mcap_min
     if args.mcap_max is not None:
@@ -1419,6 +1513,8 @@ def main():
         cfg_kwargs["turnover_min"] = args.turnover_min
     if args.rv_min is not None:
         cfg_kwargs["rv_min"] = args.rv_min
+    if args.high_vol_48h_min_pct is not None:
+        cfg_kwargs["high_vol_48h_min_pct"] = args.high_vol_48h_min_pct
     if args.leverage is not None:
         cfg_kwargs["leverage"] = args.leverage
     if args.stop_loss_pct is not None:

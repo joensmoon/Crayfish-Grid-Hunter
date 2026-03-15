@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.3.1] — 2026-03-16
+
+### 新增功能
+
+**Category B 高波动套利 — 48h 时间窗口**
+- 涨跌幅筛选由 24h 改为近 48h，更准确捕捉持续性高波动行情
+- 新增 `enrich_snapshot_48h()` 函数：从 1h K线获取运 48 根计算 `high_48h`、`low_48h`、`price_change_pct_48h`、`volatility_48h_pct`
+- `screen_high_volatility()` 涨跌幅筛选改为 `abs(price_change_pct_48h) >= HIGH_VOL_48H_MIN_PCT`（默认 10%）
+- `MarketSnapshot` 新增四个 48h 字段：`high_48h`、`low_48h`、`price_change_pct_48h`、`volatility_48h_pct`
+- CLI 新增 `--high-vol-48h-min-pct` 参数，支持用户自定义 48h 涨跌幅阈値
+
+**Category A 次新币网格 — 市値过滤**
+- 次新币筛选加入市値过滤：默认 $1000万-$2亿（`CAT_A_MCAP_MIN=10_000_000`、`CAT_A_MCAP_MAX=200_000_000`）
+- 无市値数据时优雅降级（不过滤），避免数据缺失时错误排除合法标的
+- CLI 新增 `--cat-a-mcap-min` 和 `--cat-a-mcap-max` 参数
+- `screen_recent_contracts()` 新增 `token_data` 参数，市値信息写入 `category_reason`
+
+### 测试
+- 175/175 通过（原有 72 + v2.0 新增 90 + v2.3.1 新增 13）
+- 新增 `enrich_snapshot_48h`、48h 过滤、Cat A 市値过滤、CLI 参数 4 组专项测试
+
+---
+
 ## [2.3.0] — 2026-03-15
 
 ### 严重问题修复

@@ -1,13 +1,13 @@
 ---
 name: crayfish-grid-hunter
 description: 币安 USDS-M 合约网格猎手。双分类筛选（次新币横盘+高波动套利）→ 等比中性网格。所有数据来自币安官方 API 实时获取，严禁 AI 自行生成任何数值。触发词：次新币网格、高波动套利、网格猎手。
-version: 2.3.0
+version: 2.3.1
 author: joensmoon
 homepage: https://github.com/joensmoon/Crayfish-Grid-Hunter
 metadata: {"openclaw":{"emoji":"🦞","requires":{"bins":["python3"]},"install":[{"id":"pip-deps","kind":"download","url":"https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/install.sh","label":"Install Python dependencies (requests, tabulate)"}]}}
 ---
 
-# Crayfish Grid Hunter v2.3
+# Crayfish Grid Hunter v2.3.1
 
 币安 USDS-M 永续合约智能网格交易助手。
 
@@ -59,9 +59,11 @@ metadata: {"openclaw":{"emoji":"🦞","requires":{"bins":["python3"]},"install":
 | 用户说的话 | 对应 CLI 参数 |
 | :--- | :--- |
 | "合约上线天数改为120天" | `--contract-recent-days 120` |
-| "次新币天数改为60天" | `--contract-recent-days 60` |
-| "杠杆5倍" | `--leverage 5` |
-| "市值范围5亿到20亿" | `--mcap-min 500000000 --mcap-max 2000000000` |
+| "次新币市値最低500万" | `--cat-a-mcap-min 5000000` |
+| "次新币市値上限改为5亿" | `--cat-a-mcap-max 500000000` |
+| "杠杆倍数" | `--leverage 5` |
+| "高波动套利市値范围改为2亿-10亿" | `--mcap-min 200000000 --mcap-max 1000000000` |
+| "48h涨跌幅改为20%" | `--high-vol-48h-min-pct 20` |
 | "换手率30%以上" | `--turnover-min 0.30` |
 | "止损3%" | `--stop-loss-pct 3.0` |
 | "只看前5个结果" | `--top-n 5` |

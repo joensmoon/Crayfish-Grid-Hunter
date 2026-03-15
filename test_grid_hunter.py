@@ -76,15 +76,20 @@ def make_symbol(name, base, age_days):
 
 
 def make_snapshot(symbol, price=100.0, vol=1000000, qvol=50000000,
-                  oi=10000000, funding=-0.001, high=None, low=None):
+                  oi=10000000, funding=-0.001, high=None, low=None,
+                  pct_48h=15.0):
     h = high or price * 1.02
     l = low or price * 0.98
+    # 48h window: high/low span ~20% around price, change = pct_48h
+    h48 = price * 1.10
+    l48 = price * 0.90
     return MarketSnapshot(
         symbol=symbol, mark_price=price, index_price=price,
         last_price=price, price_change_pct_24h=2.0,
         volume_24h=vol, quote_volume_24h=qvol,
         open_interest=oi, funding_rate=funding,
         next_funding_time=0, high_24h=h, low_24h=l,
+        high_48h=h48, low_48h=l48, price_change_pct_48h=pct_48h,
     )
 
 
