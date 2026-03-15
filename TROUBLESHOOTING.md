@@ -14,13 +14,14 @@
 ### 1.2 依赖缺失
 *   **现象**: 运行脚本时提示 `ModuleNotFoundError`。
 *   **解决方法**:
-    *   Crayfish Grid Hunter 依赖于币安官方 Skills。请运行以下命令确保所有依赖已安装：
+    *   Crayfish Grid Hunter 依赖于以下币安官方 Skills。请运行以下命令确保所有依赖已安装：
         ```bash
-        skills add binance/derivatives-trading-usds-futures
-        skills add binance-web3/query-token-info
-        skills add binance-web3/trading-signal
-        skills add binance-web3/query-token-audit
-        skills add binance/assets
+        npx skills add binance/derivatives-trading-usds-futures -a openclaw -y
+        npx skills add binance-web3/query-token-info -a openclaw -y
+        ```
+    *   或者直接运行一键安装脚本，它会自动安装所有依赖：
+        ```bash
+        curl -s https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/install.sh | bash
         ```
 
 ## 2. API 与连接问题

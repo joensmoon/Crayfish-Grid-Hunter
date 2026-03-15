@@ -16,12 +16,9 @@ Grid Strategy:
   - Risk:      5% hard stop-loss below lower bound + liquidation price warning
   - Funding:   Negative funding rate bonus calculation for long-biased grids
 
-Official Skills used (unmodified):
-  - derivatives-trading-usds-futures  (fapi.binance.com)
-  - query-token-info                  (web3.binance.com — market cap data)
-  - trading-signal                    (web3.binance.com — smart money)
-  - query-token-audit                 (web3.binance.com — security)
-  - assets                            (binance.com — fee optimization)
+Official Skills dependencies (Binance official, unmodified):
+  - derivatives-trading-usds-futures  (fapi.binance.com — contract list, klines, funding rate)
+  - query-token-info                  (web3.binance.com — market cap, turnover data)
 """
 
 from __future__ import annotations

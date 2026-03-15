@@ -10,15 +10,24 @@
 curl -s https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/install.sh | bash
 ```
 
-此脚本会自动将 Crayfish Grid Hunter 及其所有依赖的币安官方 Skills 安装到您的 OpenClaw 环境中。
+此脚本会自动完成以下操作：
+- 安装 Crayfish Grid Hunter 核心引擎
+- 安装官方依赖 Skills：`derivatives-trading-usds-futures`（合约数据）和 `query-token-info`（市值数据）
+- 验证安装完整性
 
-## 2. 基础配置 (可选)
+## 2. 官方 Skill 依赖
 
-虽然您可以直接使用，但为了获得最佳体验（如账户余额检查和费用优化），建议配置币安 API 密钥：
+本 Skill 依赖以下币安官方 Skills（安装脚本会自动安装）：
 
+| 依赖 Skill | 用途 |
+| :--- | :--- |
+| `derivatives-trading-usds-futures` | 合约列表、K线数据、资金费率 |
+| `query-token-info` | 代币市值、24h 交易量 |
+
+如需手动安装依赖：
 ```bash
-export BINANCE_API_KEY="您的API_KEY"
-export BINANCE_API_SECRET="您的API_SECRET"
+npx skills add binance/derivatives-trading-usds-futures -a openclaw -y
+npx skills add binance-web3/query-token-info -a openclaw -y
 ```
 
 ## 3. 运行您的第一个策略
@@ -33,9 +42,18 @@ export BINANCE_API_SECRET="您的API_SECRET"
 3. **历史回测**：使用过去 30 天的数据验证该策略的有效性。
 4. **输出报告**：您将看到包含策略参数、预计收益和风险提示的完整报告。
 
-## 4. 下一步
+## 4. 自定义参数
+
+您可以通过自然语言直接调整参数，无需修改任何代码：
+
+- *"次新币网格，杠杆 3 倍，市值上限 1 亿"*
+- *"高波动套利，筛选前 5 名，止损设为 3%"*
+- *"网格猎手，上线天数改为 60 天，涨跌幅 15% 以上"*
+
+完整的参数列表请参阅 [CONFIGURATION.md](CONFIGURATION.md)。
+
+## 5. 下一步
 
 *   查看 [EXAMPLES.md](EXAMPLES.md) 了解更多触发词和自定义参数。
 *   查看 [CONFIGURATION.md](CONFIGURATION.md) 了解如何微调策略参数。
 *   如果遇到问题，请参考 [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)。
-

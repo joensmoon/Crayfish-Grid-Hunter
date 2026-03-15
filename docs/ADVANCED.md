@@ -44,8 +44,9 @@ Crayfish 内置了 `MIN_GRID_PROFIT = 0.8%` 的硬性要求。
 }
 ```
 
-## 4. 结合 Smart Money 信号
+## 4. 未来计划：Smart Money 信号集成
 
-Crayfish 利用币安 Web3 Skill `trading-signal` 来验证标的。
-如果系统推荐的某个标的近期出现了 Smart Money 的大量买入信号，该标的在最终排名中的得分会获得 15% 的加权提升。这大大提高了突破行情的胜率。
+未来版本计划集成币安 Web3 的 `trading-signal` Skill，用于验证推荐标的的 Smart Money 流向。当某个标的近期出现 Smart Money 大量买入信号时，其排名得分将获得加权提升。
+
+> **注意**：当前 v1.0.0 版本尚未实现此功能。当前版本仅依赖 `derivatives-trading-usds-futures` 和 `query-token-info` 两个官方 Skills。
 

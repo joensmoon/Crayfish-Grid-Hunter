@@ -1,59 +1,56 @@
 # API Usage Guide
 
-This document provides detailed instructions on how Crayfish Grid Hunter uses each of its 5 integrated Binance skills to gather data and execute its workflow.
+This document provides detailed instructions on how Crayfish Grid Hunter v1.0.0 uses Binance official APIs to gather data and execute its workflow.
+
+## Current Dependencies (v1.0.0)
+
+Crayfish Grid Hunter v1.0.0 relies on **2 official Binance Skills**:
+
+| Skill | Source | Purpose |
+| :--- | :--- | :--- |
+| `derivatives-trading-usds-futures` | binance/binance-skills-hub | Contract list, klines, funding rate, mark price, open interest |
+| `query-token-info` | binance-web3/query-token-info | Token market cap, 24h volume, turnover data |
 
 ## API Base URLs
 
-The Spot API (`api.binance.com`) may return HTTP 451 in certain regions. In such cases, use the fallback endpoint.
-
-| Environment | Primary URL | Fallback URL |
-|---|---|---|
-| Spot Mainnet | `https://api.binance.com` | `https://data-api.binance.vision` |
+| Service | Primary URL | Fallback URL |
+| :--- | :--- | :--- |
+| Futures API | `https://fapi.binance.com` | `https://testnet.binancefuture.com` |
 | Web3 API | `https://web3.binance.com` | N/A |
 
-## 1. Fetching Market Rankings (crypto-market-rank)
+---
 
-To identify potential trading pairs, first get a list of top-traded tokens by volume.
+## 1. Futures Contract Data (derivatives-trading-usds-futures)
 
-*   **Skill**: `crypto-market-rank`
-*   **API**: `Unified Token Rank`
-*   **Method**: `POST`
-*   **URL**: `https://web3.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/market/token/pulse/unified/rank/list`
-*   **Authentication**: None required (public endpoint)
-*   **Request Body**:
-    ```json
-    {
-        "rankType": 10,
-        "period": 50,
-        "sortBy": 70,
-        "orderAsc": false,
-        "page": 1,
-        "size": 200
-    }
-    ```
+### 1.1 Exchange Info — Contract List
 
-| Parameter | Value | Description |
-| :--- | :--- | :--- |
-| `rankType` | 10 | Trending tokens |
-| `period` | 50 | 24-hour period |
-| `sortBy` | 70 | Sort by volume |
-| `size` | 200 | Number of tokens to fetch |
+*   **API**: `GET /fapi/v1/exchangeInfo`
+*   **Purpose**: Fetch all USDS-M perpetual futures contracts
+*   **Authentication**: None required
+*   **Key Fields**: `symbol`, `baseAsset`, `onboardDate`, `status`, `contractType`, `pricePrecision`, `quantityPrecision`
+*   **Filters Used**: `status=TRADING`, `contractType=PERPETUAL`, `quoteAsset=USDT`
 
-## 2. Fetching Historical Price Data (spot)
+### 1.2 24hr Ticker — Price & Volume
 
-For each token identified in the market scan, fetch its historical Kline/Candlestick data.
+*   **API**: `GET /fapi/v1/ticker/24hr`
+*   **Purpose**: Fetch 24-hour price change statistics for all symbols
+*   **Authentication**: None required
+*   **Key Fields**: `symbol`, `lastPrice`, `priceChangePercent`, `volume`, `quoteVolume`
 
-*   **Skill**: `spot`
-*   **API**: `/api/v3/klines`
-*   **Method**: `GET`
-*   **URL**: `https://api.binance.com/api/v3/klines` (or `https://data-api.binance.vision/api/v3/klines` as fallback)
-*   **Authentication**: None required for market data
+### 1.3 Premium Index — Mark Price & Funding Rate
 
-**Example (14-day daily data for volatility analysis)**:
-`GET /api/v3/klines?symbol=LINKUSDT&interval=1d&limit=14`
+*   **API**: `GET /fapi/v1/premiumIndex`
+*   **Purpose**: Fetch mark price and funding rate for a specific symbol
+*   **Authentication**: None required
+*   **Parameters**: `symbol=<SYMBOL>`
+*   **Key Fields**: `markPrice`, `lastFundingRate`
 
-**Example (72-hour hourly data for range generation)**:
-`GET /api/v3/klines?symbol=LINKUSDT&interval=1h&limit=72`
+### 1.4 Klines — Historical Candlestick Data
+
+*   **API**: `GET /fapi/v1/klines`
+*   **Purpose**: Fetch historical candlestick data for technical analysis (ATR, Bollinger Bands, ADX)
+*   **Authentication**: None required
+*   **Parameters**: `symbol=<SYMBOL>`, `interval=1d`, `limit=30`
 
 **Kline Response Format** (each element is an array):
 
@@ -72,76 +69,56 @@ For each token identified in the market scan, fetch its historical Kline/Candles
 | 10 | Taker buy quote asset volume | String |
 | 11 | Ignore | String |
 
-## 3. Smart Money Signals (trading-signal)
+### 1.5 Open Interest
 
-Query Smart Money buy/sell signals to validate grid trading candidates.
+*   **API**: `GET /fapi/v1/openInterest`
+*   **Purpose**: Fetch open interest for turnover rate calculation
+*   **Authentication**: None required
+*   **Parameters**: `symbol=<SYMBOL>`
 
-*   **Skill**: `trading-signal`
-*   **API**: `Smart Money Signal`
-*   **Method**: `POST`
-*   **URL**: `https://web3.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/web/signal/smart-money`
+---
+
+## 2. Token Market Data (query-token-info)
+
+### 2.1 Token Search — Market Cap & Volume
+
+*   **API**: `GET /bapi/defi/v5/public/wallet-direct/buw/wallet/market/token/search`
+*   **Base URL**: `https://web3.binance.com`
+*   **Purpose**: Fetch market cap and 24h trading volume for token screening
 *   **Authentication**: None required (public endpoint)
-*   **Request Body**:
-    ```json
-    {
-        "page": 1,
-        "pageSize": 100,
-        "chainId": "CT_501"
-    }
-    ```
+*   **Parameters**: `keyword=<BASE_ASSET>`, `orderBy=volume24h`
 
-**Response Fields of Interest**:
+**Key Response Fields**:
 
 | Field | Description |
 | :--- | :--- |
 | `symbol` | Token symbol |
-| `side` | Signal direction (BUY/SELL) |
-| `triggerPrice` | Price at which the signal was triggered |
-| `currentPrice` | Current price of the token |
-| `maxGainRate` | Maximum gain percentage since signal |
-| `exitRate` | Exit rate percentage |
+| `marketCap` | Market capitalization (USD) |
+| `volume24h` | 24-hour trading volume (USD) |
+| `createTime` | Token creation time |
 
-## 4. Token Security Audit (query-token-audit)
+**Important**: The code uses **strict exact symbol matching** to avoid cross-contamination. For example, searching "ACE" might return "ACEME" as the first result, but only an exact match to "ACE" will be used.
 
-Perform a security audit on candidate tokens before recommending them.
+---
 
-*   **Skill**: `query-token-audit`
-*   **API**: `Token Security Audit`
-*   **Method**: `POST`
-*   **URL**: `https://web3.binance.com/bapi/defi/v1/public/wallet-direct/security/token/audit`
-*   **Authentication**: None required (public endpoint)
-*   **Request Body**:
-    ```json
-    {
-        "binanceChainId": "56",
-        "contractAddress": "<contract_address>",
-        "requestId": "<uuid-v4>"
-    }
-    ```
+## 3. Future Plans (Not Yet Implemented in v1.0.0)
 
-**Risk Assessment Matrix**:
+The following APIs are planned for future integration but are **not used in the current v1.0.0 release**:
 
-| Risk Category | Check Fields | DANGEROUS Threshold |
-| :--- | :--- | :--- |
-| Honeypot | `isHoneypot` | `true` |
-| Rug Pull | `isRugPull` | `true` |
-| Buy/Sell Tax | `buyTax`, `sellTax` | > 10% |
-| Contract Verification | `isOpenSource` | `false` (WARNING only) |
+### 3.1 Smart Money Signals (trading-signal)
 
-## 5. Fee Optimization (assets)
+*   **Skill**: `trading-signal` (binance-web3)
+*   **Purpose**: Validate grid trading candidates with Smart Money buy/sell signals
+*   **Status**: Planned for future release
 
-Check and optimize the user's trading fee settings.
+### 3.2 Token Security Audit (query-token-audit)
 
-*   **Skill**: `assets`
-*   **Authentication**: Required (API Key + HMAC-SHA256 signature)
+*   **Skill**: `query-token-audit` (binance-web3)
+*   **Purpose**: Perform security audits on candidate tokens
+*   **Status**: Planned for future release
 
-**Check BNB Burn Status**:
-`GET /sapi/v1/bnbBurn`
+### 3.3 Fee Optimization (assets)
 
-This returns `{"spotBNBBurn": true/false, "interestBNBBurn": true/false}`. If `spotBNBBurn` is `false`, Crayfish Grid Hunter recommends enabling it to save approximately 25% on trading fees.
-
-**Check Account Balance**:
-`POST /sapi/v1/asset/getUserAsset`
-
-This returns the user's asset balances. Crayfish Grid Hunter uses this to verify the user has sufficient funds for the recommended grid configuration.
-
+*   **Skill**: `assets` (binance)
+*   **Purpose**: Check BNB burn status and optimize trading fees
+*   **Status**: Planned for future release

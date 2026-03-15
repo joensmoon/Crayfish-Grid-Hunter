@@ -13,6 +13,39 @@ metadata: {"openclaw":{"emoji":"🦞","requires":{"bins":["python3"]},"install":
 
 ---
 
+## 安装后使用指南
+
+安装完成后，您可以立即在 OpenClaw 对话框中使用以下触发指令：
+
+| 触发指令 | 功能说明 | 适用场景 |
+| :--- | :--- | :--- |
+| `次新币网格` | 扫描上线 ≤90 天、市值 $10M-$200M 的次新币横盘机会 | 低风险稳健网格 |
+| `高波动套利` | 扫描 48h 涨跌幅 >10%、换手率极高的热点币种 | 高收益激进套利 |
+| `网格猎手` | 同时运行两类扫描，汇总最优结果 | 综合扫描 |
+
+您还可以通过自然语言直接调整参数，例如：
+
+- *"次新币网格，杠杆 3 倍，市值上限 1 亿"*
+- *"高波动套利，筛选前 5 名，止损设为 3%"*
+- *"网格猎手，上线天数改为 60 天，涨跌幅要 15% 以上"*
+
+### 官方 Skill 依赖
+
+本 Skill 依赖以下币安官方 Skills（安装脚本会自动安装）：
+
+| 依赖 Skill | 来源 | 用途 |
+| :--- | :--- | :--- |
+| `derivatives-trading-usds-futures` | binance/binance-skills-hub | 合约列表、K线数据、资金费率、标记价格 |
+| `query-token-info` | binance-web3/query-token-info | 代币市值、24h 交易量、换手率数据 |
+
+> **注意**：以上依赖均为币安官方发布的 Skills，本项目未对其做任何修改。如果安装脚本未自动安装依赖，请手动执行：
+> ```bash
+> npx skills add binance/derivatives-trading-usds-futures -a openclaw -y
+> npx skills add binance-web3/query-token-info -a openclaw -y
+> ```
+
+---
+
 ## CRITICAL: 执行规则（最高优先级，必须遵守）
 
 **你是 AI Agent。当用户触发此 Skill 时，你必须立即执行以下操作，不得有任何偏差：**
@@ -61,12 +94,15 @@ metadata: {"openclaw":{"emoji":"🦞","requires":{"bins":["python3"]},"install":
 | "合约上线天数改为120天" | `--contract-recent-days 120` |
 | "次新币市値最低500万" | `--cat-a-mcap-min 5000000` |
 | "次新币市値上限改为5亿" | `--cat-a-mcap-max 500000000` |
-| "杠杆倍数" | `--leverage 5` |
+| "杠杆倍数改为3" | `--leverage 3` |
 | "高波动套利市値范围改为2亿-10亿" | `--mcap-min 200000000 --mcap-max 1000000000` |
 | "48h涨跌幅改为20%" | `--high-vol-48h-min-pct 20` |
 | "换手率30%以上" | `--turnover-min 0.30` |
 | "止损3%" | `--stop-loss-pct 3.0` |
 | "只看前5个结果" | `--top-n 5` |
+| "单格利润最低1.5%" | `--min-grid-profit 0.015` |
+| "扫描前100个币种" | `--max-symbols 100` |
+| "年化波动率最低20%" | `--rv-min 20` |
 
 ### 脚本执行失败时的处理
 
@@ -100,18 +136,12 @@ metadata: {"openclaw":{"emoji":"🦞","requires":{"bins":["python3"]},"install":
 ## 安装
 
 ```bash
-# 一键安装
+# 一键安装（推荐，自动安装所有依赖）
 curl -s https://raw.githubusercontent.com/joensmoon/Crayfish-Grid-Hunter/main/install.sh | bash
 
 # 手动安装
 git clone https://github.com/joensmoon/Crayfish-Grid-Hunter.git ~/.openclaw/skills/crayfish-grid-hunter-repo
 pip3 install requests tabulate
+npx skills add binance/derivatives-trading-usds-futures -a openclaw -y
+npx skills add binance-web3/query-token-info -a openclaw -y
 ```
-
-## 依赖 Skills（均为币安官方）
-
-| Skill | 来源 | 用途 |
-| :--- | :--- | :--- |
-| `derivatives-trading-usds-futures` | binance/binance-skills-hub | 合约列表、K线、资金费率 |
-| `query-token-info` | binance/binance-skills-hub | 市值、换手率数据 |
-
